@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Upload, FileText, Target, Download, Zap, Moon, Sun } from 'lucide-react'
+import { Target, Moon, Sun } from 'lucide-react'
 import ResumUploader from './components/ResumeUploader'
 import JobDescriptionInput from './components/JobDescriptionInput'
 import AnalysisResults from './components/AnalysisResults'
+import { extractResumeText } from './services/gemini'
 import './App.css'
 
 type AppStep = 'upload' | 'job' | 'results'
@@ -10,11 +11,15 @@ type AppStep = 'upload' | 'job' | 'results'
 function App() {
   const [currentStep, setCurrentStep] = useState<AppStep>('upload')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [resumeText, setResumeText] = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [isDark, setIsDark] = useState(true)
 
-  const handleResumeUpload = (file: File) => {
+  const handleResumeUpload = async (file: File) => {
     setResumeFile(file)
+    // Extract text from resume file
+    const text = await extractResumeText(file)
+    setResumeText(text)
     setCurrentStep('job')
   }
 
@@ -112,7 +117,7 @@ function App() {
 
             {currentStep === 'results' && resumeFile && jobDescription && (
               <AnalysisResults
-                resumeFile={resumeFile}
+                resumeText={resumeText}
                 jobDescription={jobDescription}
                 onReset={handleReset}
               />

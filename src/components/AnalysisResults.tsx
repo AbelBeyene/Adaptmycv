@@ -1,46 +1,37 @@
 import { useState, useEffect } from 'react'
 import { Download, RefreshCw, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { analyzeResumeJobMatch, AnalysisData } from '../services/gemini'
 
 interface AnalysisResultsProps {
-  resumeFile: File
+  resumeText: string
   jobDescription: string
   onReset: () => void
 }
 
-interface AnalysisData {
-  matchScore: number
-  hardSkillsMatch: string[]
-  softSkillsMatch: string[]
-  missingSkills: string[]
-  recommendations: string[]
-}
-
-export default function AnalysisResults({ resumeFile, jobDescription, onReset }: AnalysisResultsProps) {
-  const [isLoading, setIsLoading] = useState(true)
+export default function AnalysisResults({ resumeText, jobDescription, onReset }: AnalysisResultsProps) {
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate API call for analysis
-    const timer = setTimeout(() => {
-      setAnalysis({
-        matchScore: 72,
-        hardSkillsMatch: ['React', 'TypeScript', 'Node.js', 'PostgreSQL', 'Docker'],
-        softSkillsMatch: ['Problem Solving', 'Team Collaboration'],
-        missingSkills: ['Kubernetes', 'AWS API Gateway', 'GraphQL (advanced)'],
-        recommendations: [
-          'Highlight your Docker experience more prominently',
-          'Add AWS projects to your experience section',
-          'Consider adding keywords from job description to skills section',
-          'Emphasize team leadership if you have any experience',
-        ],
-      })
-      setIsLoading(false)
-    }, 2000)
+    const runAnalysis = async () => {
+      try {
+        setIsAnalyzing(true)
+        setError(null)
+        const result = await analyzeResumeJobMatch(resumeText, jobDescription)
+        setAnalysis(result)
+      } catch (err) {
+        console.error('Analysis failed:', err)
+        setError(err instanceof Error ? err.message : 'Failed to analyze resume')
+      } finally {
+        setIsAnalyzing(false)
+      }
+    }
 
-    return () => clearTimeout(timer)
-  }, [])
+    runAnalysis()
+  }, [resumeText, jobDescription])
 
-  if (isLoading) {
+  if (isAnalyzing) {
     return (
       <div className="space-y-6">
         <h2 className="section-title">Analyzing Your Resume...</h2>
@@ -55,8 +46,35 @@ export default function AnalysisResults({ resumeFile, jobDescription, onReset }:
     )
   }
 
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h2 className="section-title">Analysis Error</h2>
+        <div className="card border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20">
+          <div className="flex gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-red-900 dark:text-red-200">Failed to analyze resume</h3>
+              <p className="text-sm text-red-800 dark:text-red-300 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+        <button onClick={onReset} className="btn-primary">
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
   if (!analysis) {
-    return <div>Error loading analysis</div>
+    return (
+      <div className="space-y-6">
+        <h2 className="section-title">No Analysis Available</h2>
+        <button onClick={onReset} className="btn-primary">
+          Start Over
+        </button>
+      </div>
+    )
   }
 
   return (

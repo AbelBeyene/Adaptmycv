@@ -2,15 +2,16 @@ import { useState, useRef } from 'react'
 import { Upload, FileText, AlertCircle } from 'lucide-react'
 
 interface ResumeUploaderProps {
-  onUpload: (file: File) => void
+  onUpload: (file: File) => Promise<void>
 }
 
 export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFile = (file: File) => {
+  const handleFile = async (file: File) => {
     setError(null)
 
     if (!file.type.includes('pdf') && !file.type.includes('document') && !file.type.includes('word')) {
@@ -23,7 +24,13 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
       return
     }
 
-    onUpload(file)
+    setIsLoading(true)
+    try {
+      await onUpload(file)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process resume')
+      setIsLoading(false)
+    }
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -58,8 +65,10 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isLoading && fileInputRef.current?.click()}
         className={`card cursor-pointer border-2 border-dashed transition-all ${
+          isLoading ? 'opacity-60 cursor-not-allowed' : ''
+        } ${
           isDragging
             ? 'border-black dark:border-white bg-gray-50 dark:bg-dark-card'
             : 'border-gray-300 dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-600'
@@ -71,15 +80,24 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
           onChange={handleFileSelect}
           accept=".pdf,.doc,.docx"
           className="hidden"
+          disabled={isLoading}
         />
 
         <div className="flex flex-col items-center justify-center py-12">
           <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-dark-border flex items-center justify-center mb-4">
-            <Upload className="w-8 h-8 text-gray-600 dark:text-dark-text-secondary" />
+            {isLoading ? (
+              <div className="animate-spin">
+                <Upload className="w-8 h-8 text-gray-600 dark:text-dark-text-secondary" />
+              </div>
+            ) : (
+              <Upload className="w-8 h-8 text-gray-600 dark:text-dark-text-secondary" />
+            )}
           </div>
-          <h3 className="text-lg font-semibold mb-1">Drop your resume here</h3>
+          <h3 className="text-lg font-semibold mb-1">
+            {isLoading ? 'Processing resume...' : 'Drop your resume here'}
+          </h3>
           <p className="text-gray-600 dark:text-dark-text-secondary text-center">
-            or click to browse. Supports PDF, DOCX, DOC
+            {isLoading ? 'Extracting text and preparing analysis...' : 'or click to browse. Supports PDF, DOCX, DOC'}
           </p>
           <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-2">
             Max file size: 10MB
