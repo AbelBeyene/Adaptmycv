@@ -1,9 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 
-// Configure PDF.js worker - use CDN for better browser compatibility
+// Configure PDF.js worker - use vite's public path handling
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  const workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).href
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 }
 
 const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
@@ -83,8 +84,23 @@ async function callOpenRouterAPI(prompt: string): Promise<string> {
 async function extractPDFText(file: File): Promise<string> {
   try {
     console.log('Extracting PDF text from:', file.name, 'Size:', file.size)
+    
+    // Convert File to ArrayBuffer for better browser compatibility
     const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    
+    // Use typed array instead of raw buffer for better compatibility
+    const typedArray = new Uint8Array(arrayBuffer)
+    
+    // Load PDF with compatibility options
+    const loadingTask = pdfjsLib.getDocument({
+      data: typedArray,
+      // Disable streaming for better browser compatibility
+      disableStream: true,
+      // Disable range requests which can cause issues in some browsers
+      disableRange: true,
+    })
+    
+    const pdf = await loadingTask.promise
     console.log('PDF loaded, pages:', pdf.numPages)
     const textPages: string[] = []
 

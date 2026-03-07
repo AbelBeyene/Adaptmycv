@@ -18,4 +18,17 @@ export default defineConfig({
     port: 5173,
     open: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Ensure worker files are handled correctly
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name && assetInfo.name.includes('pdf.worker')) {
+            return 'pdf.worker.min.mjs'
+          }
+          return 'assets/[name]-[hash][extname]'
+        }
+      }
+    }
+  }
 })

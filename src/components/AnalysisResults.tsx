@@ -102,11 +102,16 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
     return (
       <div className="space-y-6">
         <h2 className="section-title">Analyzing Your Resume...</h2>
-        <div className="card">
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-200 dark:bg-dark-border rounded-lg animate-pulse" />
-            ))}
+        <div className="card space-y-3">
+          <p className="text-sm text-gray-600 dark:text-dark-text-secondary">Running ATS match and skill-gap analysis...</p>
+          <div className="space-y-3">
+            <div className="h-6 w-48 rounded shimmer" />
+            <div className="h-20 w-full rounded-lg shimmer" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="h-28 rounded-lg shimmer" />
+              <div className="h-28 rounded-lg shimmer" />
+            </div>
+            <div className="h-24 w-full rounded-lg shimmer" />
           </div>
         </div>
       </div>
@@ -241,8 +246,18 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
         </div>
 
         {isGeneratingCoverLetter ? (
-          <div className="rounded-lg border border-gray-200 dark:border-dark-border p-4 bg-gray-50 dark:bg-dark-card/50">
+          <div className="rounded-lg border border-gray-200 dark:border-dark-border p-4 bg-gray-50 dark:bg-dark-card/50 space-y-3">
             <p className="text-sm text-gray-600 dark:text-dark-text-secondary">Generating 4 tailored cover letter versions...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map((item) => (
+                <div key={item} className="rounded-lg border border-gray-200 dark:border-dark-border p-3 bg-white dark:bg-dark-card space-y-2">
+                  <div className="h-4 w-28 rounded shimmer" />
+                  <div className="h-3 w-full rounded shimmer" />
+                  <div className="h-3 w-11/12 rounded shimmer" />
+                  <div className="h-3 w-10/12 rounded shimmer" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : coverLetterError ? (
           <div className="rounded-lg border border-red-200 dark:border-red-900/50 p-4 bg-red-50 dark:bg-red-900/20">

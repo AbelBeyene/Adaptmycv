@@ -102,3 +102,33 @@ html {
 .slide-in {
   animation: slideIn 0.3s ease-out;
 }
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(229 231 235 / 0.9) 20%,
+    rgb(243 244 246 / 1) 35%,
+    rgb(229 231 235 / 0.9) 50%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.dark .shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(42 50 66 / 0.9) 20%,
+    rgb(64 75 96 / 1) 35%,
+    rgb(42 50 66 / 0.9) 50%
+  );
+  background-size: 200% 100%;
+}

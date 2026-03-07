@@ -245,8 +245,8 @@ function App() {
           {/* Right Side Columns */}
           {resumeFile && (
             <div className="hidden lg:flex gap-3 flex-shrink-0">
-              <aside className="w-64 xl:w-72">
-                <div className="sticky top-20 space-y-3">
+              <aside className="w-64 xl:w-72 h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+                <div className="space-y-3">
                   <div className="card p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Resume</h3>
@@ -293,8 +293,8 @@ function App() {
                 </div>
               </aside>
 
-              <aside className="w-64 xl:w-72">
-                <div className="sticky top-20">
+              <aside className="w-64 xl:w-72 h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+                <div>
                   <div className="card p-3">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -414,8 +414,13 @@ function App() {
                     <div className="space-y-2">
                       {isLoadingJobs && (
                         <div className="space-y-2">
+                          <p className="text-xs text-gray-600 dark:text-dark-text-secondary">Fetching matching jobs...</p>
                           {[1, 2, 3].map((item) => (
-                            <div key={item} className="h-16 rounded-lg bg-gray-200 dark:bg-dark-border animate-pulse" />
+                            <div key={item} className="rounded-lg border border-gray-200 dark:border-dark-border p-2 bg-gray-50 dark:bg-dark-card/50 space-y-2">
+                              <div className="h-4 w-3/4 rounded shimmer" />
+                              <div className="h-3 w-full rounded shimmer" />
+                              <div className="h-3 w-2/3 rounded shimmer" />
+                            </div>
                           ))}
                         </div>
                       )}

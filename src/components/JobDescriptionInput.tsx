@@ -103,6 +103,15 @@ export default function JobDescriptionInput({ onSubmit, onBack }: JobDescription
             </button>
           </div>
 
+          {isLoading && (
+            <div className="rounded-lg border border-gray-200 dark:border-dark-border p-3 bg-white dark:bg-dark-card space-y-2">
+              <div className="h-3 w-40 rounded shimmer" />
+              <div className="h-3 w-full rounded shimmer" />
+              <div className="h-3 w-11/12 rounded shimmer" />
+              <div className="h-3 w-10/12 rounded shimmer" />
+            </div>
+          )}
+
           {linkError && (
             <p className="text-xs text-red-600 dark:text-red-400">{linkError}</p>
           )}
@@ -145,7 +154,7 @@ export default function JobDescriptionInput({ onSubmit, onBack }: JobDescription
             className="btn-primary flex-1 flex items-center justify-center gap-2"
           >
             <Zap className="w-4 h-4" />
-            {isLoading ? 'Analyzing...' : 'Analyze Match'}
+            {isLoading ? 'Working...' : 'Analyze Match'}
           </button>
         </div>
       </form>
