@@ -1,11 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-// Configure PDF.js worker - use vite's public path handling
-if (typeof window !== 'undefined') {
-  const workerSrc = new URL('/pdf.worker.min.mjs', window.location.origin).href
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
-}
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
 const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
@@ -92,15 +89,38 @@ async function extractPDFText(file: File): Promise<string> {
     const typedArray = new Uint8Array(arrayBuffer)
     
     // Load PDF with compatibility options
-    const loadingTask = pdfjsLib.getDocument({
-      data: typedArray,
-      // Disable streaming for better browser compatibility
-      disableStream: true,
-      // Disable range requests which can cause issues in some browsers
-      disableRange: true,
-    })
-    
-    const pdf = await loadingTask.promise
+    const createLoadingTask = (disableWorker: boolean) =>
+      pdfjsLib.getDocument({
+        data: typedArray,
+        // Disable streaming for better browser compatibility
+        disableStream: true,
+        // Disable range requests which can cause issues in some browsers
+        disableRange: true,
+        // Fallback path for environments where worker dynamic import is blocked
+        disableWorker,
+      } as any)
+
+    let loadingTask = createLoadingTask(false)
+    let pdf
+
+    try {
+      pdf = await loadingTask.promise
+    } catch (workerError) {
+      const message = workerError instanceof Error ? workerError.message : String(workerError)
+      const shouldFallback =
+        message.toLowerCase().includes('fake worker') ||
+        message.toLowerCase().includes('dynamically imported module') ||
+        message.toLowerCase().includes('setting up fake worker failed')
+
+      if (!shouldFallback) {
+        throw workerError
+      }
+
+      console.warn('PDF worker failed, retrying without worker:', message)
+      loadingTask = createLoadingTask(true)
+      pdf = await loadingTask.promise
+    }
+
     console.log('PDF loaded, pages:', pdf.numPages)
     const textPages: string[] = []
 
