@@ -107,7 +107,7 @@ The app uses Google's Gemini Flash API for resume analysis. The `services/gemini
 
 ## Styling
 
-The project uses Tailwind CSS with a minimalist design inspired by better-auth:
+The project uses Tailwind CSS with a minimalist design 
 
 - Clean, modern UI with smooth transitions
 - Dark and light theme support
@@ -158,3 +158,4 @@ Built with ❤️ to help you land your next opportunity.
 ## Support
 
 For issues or feature requests, please open an issue in the repository.
+abelbeyene.dev

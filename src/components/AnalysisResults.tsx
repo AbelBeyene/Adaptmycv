@@ -149,6 +149,11 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
     )
   }
 
+  const technicalSkillsTotal = analysis.hardSkillsMatch.length + analysis.missingSkills.length
+  const technicalCoverage = technicalSkillsTotal > 0
+    ? Math.round((analysis.hardSkillsMatch.length / technicalSkillsTotal) * 100)
+    : analysis.matchScore
+
   return (
     <div className="space-y-6">
       {/* Match Score */}
@@ -172,13 +177,18 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
               <div
                 className="absolute inset-0 rounded-full border-[6px] border-black dark:border-white"
                 style={{
-                  clipPath: `conic-gradient(black ${analysis.matchScore}%, transparent ${analysis.matchScore}%)`,
+                  clipPath: `conic-gradient(black ${technicalCoverage}%, transparent ${technicalCoverage}%)`,
                 }}
               />
-              <div className="relative w-24 h-24 rounded-full bg-white dark:bg-dark-card flex items-center justify-center">
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">{analysis.matchScore}%</span>
+              <div className="relative w-24 h-24 rounded-full bg-white dark:bg-dark-card flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-gray-900 dark:text-white">{analysis.missingSkills.length}</span>
+                <span className="text-[11px] uppercase tracking-wide text-gray-600 dark:text-dark-text-secondary">Missing</span>
               </div>
             </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-dark-border flex items-center justify-between text-sm">
+            <span className="text-gray-600 dark:text-dark-text-secondary">Technical coverage</span>
+            <span className="font-semibold text-gray-900 dark:text-white">{technicalCoverage}%</span>
           </div>
         </div>
       </div>

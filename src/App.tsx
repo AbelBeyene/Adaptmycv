@@ -11,6 +11,7 @@ import type { PrioritizedRecommendation } from './components/AnalysisResults'
 type AppStep = 'upload' | 'job' | 'results'
 
 function App() {
+  const steps: AppStep[] = ['upload', 'job', 'results']
   const [currentStep, setCurrentStep] = useState<AppStep>('upload')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [resumeText, setResumeText] = useState('')
@@ -136,17 +137,20 @@ function App() {
     setIsLoadingJobs(false)
   }
 
-  const getRecommendationColorClasses = (severity: PrioritizedRecommendation['severity']) => {
+  const getRecommendationTextClasses = (severity: PrioritizedRecommendation['severity']) => {
     if (severity === 'critical') {
-      return 'border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-200'
+      return 'text-red-700 dark:text-red-300'
     }
 
     if (severity === 'important') {
-      return 'border-orange-200 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-200'
+      return 'text-orange-700 dark:text-orange-300'
     }
 
-    return 'border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-200'
+    return 'text-blue-700 dark:text-blue-300'
   }
+
+  const currentStepIndex = steps.indexOf(currentStep)
+  const progressWidth = steps.length > 1 ? (currentStepIndex / (steps.length - 1)) * 100 : 0
 
   return (
     <div className={isDark ? 'dark' : ''}>
@@ -184,36 +188,32 @@ function App() {
           <main className="flex-1 min-w-0">
             {/* Step Indicator */}
             <div className="mb-8">
-              <div className="flex items-center justify-between">
-                {(['upload', 'job', 'results'] as const).map((step, index) => (
+              <div className="relative mb-3">
+                <div className="absolute top-4 left-[16.6667%] right-[16.6667%] h-1 rounded-full bg-gray-200 dark:bg-dark-border overflow-hidden">
                   <div
-                    key={step}
-                    className="flex items-center flex-1"
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
-                        currentStep === step || index < (['upload', 'job', 'results'] as const).indexOf(currentStep)
-                          ? 'bg-black dark:bg-white text-white dark:text-black'
-                          : 'bg-gray-200 dark:bg-dark-card text-gray-600 dark:text-dark-text-secondary'
-                      }`}
-                    >
-                      {index + 1}
-                    </div>
-                    {index < 2 && (
+                    className="h-full rounded-full bg-black dark:bg-white transition-all duration-300"
+                    style={{ width: `${progressWidth}%` }}
+                  />
+                </div>
+                <div className="relative grid grid-cols-3 items-center">
+                  {steps.map((step, index) => (
+                    <div key={step} className="flex justify-center">
                       <div
-                        className={`flex-1 h-1 mx-2 transition-all ${
-                          index < (['upload', 'job', 'results'] as const).indexOf(currentStep)
-                            ? 'bg-black dark:bg-white'
-                            : 'bg-gray-200 dark:bg-dark-border'
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                          index <= currentStepIndex
+                            ? 'bg-black dark:bg-white text-white dark:text-black'
+                            : 'bg-gray-200 dark:bg-dark-card text-gray-600 dark:text-dark-text-secondary'
                         }`}
-                      />
-                    )}
-                  </div>
-                ))}
+                      >
+                        {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="mt-3 flex justify-between text-xs sm:text-sm text-gray-600 dark:text-dark-text-secondary">
-                <span>Upload Resume</span>
-                <span>Job Description</span>
+              <div className="grid grid-cols-3 text-center text-xs sm:text-sm text-gray-600 dark:text-dark-text-secondary">
+                <span>Upload</span>
+                <span>Resume Job Desc</span>
                 <span>Analysis</span>
               </div>
             </div>
@@ -245,7 +245,7 @@ function App() {
           {/* Right Side Columns */}
           {resumeFile && (
             <div className="hidden lg:flex gap-3 flex-shrink-0">
-              <aside className="w-64 xl:w-72 h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+              <aside className="w-64 xl:w-72">
                 <div className="space-y-3">
                   <div className="card p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
@@ -281,10 +281,12 @@ function App() {
                         {sidebarRecommendations.map((rec, index) => (
                           <div
                             key={`${rec.text}-${index}`}
-                            className={`rounded-lg border p-2 ${getRecommendationColorClasses(rec.severity)}`}
+                            className="rounded-lg border border-gray-200 dark:border-dark-border p-2"
                           >
-                            <p className="text-xs font-semibold uppercase tracking-wide mb-1">{rec.severity}</p>
-                            <p className="text-sm leading-relaxed">{rec.text}</p>
+                            <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${getRecommendationTextClasses(rec.severity)}`}>
+                              {rec.severity}
+                            </p>
+                            <p className="text-sm leading-relaxed text-gray-700 dark:text-dark-text-secondary">{rec.text}</p>
                           </div>
                         ))}
                       </div>
@@ -293,7 +295,7 @@ function App() {
                 </div>
               </aside>
 
-              <aside className="w-64 xl:w-72 h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+              <aside className="w-64 xl:w-72">
                 <div>
                   <div className="card p-3">
                     <div className="flex items-center justify-between mb-3">
