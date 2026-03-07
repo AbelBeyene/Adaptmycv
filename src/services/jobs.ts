@@ -14,8 +14,12 @@ export interface JobsFilters {
   country: string
   datePosted: 'all' | 'today' | '3days' | 'week' | 'month'
   remoteOnly: boolean
-  employmentType: 'all' | 'full-time' | 'part-time' | 'contract' | 'internship'
+  employmentType: 'all' | 'FULLTIME' | 'PARTTIME' | 'CONTRACTOR' | 'INTERN'
   keyword: string
+  page?: number
+  numPages?: number
+  jobRequirements?: string // 'under_3_years_experience' | 'more_than_3_years_experience' | 'no_experience' | 'no_degree'
+  radius?: number // distance in km
 }
 
 interface JSearchResponse {
@@ -60,7 +64,7 @@ function inferRole(resumeText: string): string {
   return 'software developer'
 }
 
-function inferLocation(resumeText: string): string {
+function inferLocation(resumeText: string, countryCode: string): string {
   const text = resumeText.toLowerCase()
   const knownLocations = [
     'chicago',
@@ -71,11 +75,35 @@ function inferLocation(resumeText: string): string {
     'boston',
     'los angeles',
     'atlanta',
+    'london',
+    'manchester',
+    'toronto',
+    'vancouver',
+    'berlin',
+    'munich',
+    'paris',
+    'sydney',
+    'melbourne',
+    'mumbai',
+    'bangalore',
     'remote',
   ]
 
   const matched = knownLocations.find((loc) => text.includes(loc))
-  return matched || 'united states'
+  if (matched) return matched
+
+  // Map country code to country name
+  const countryMap: Record<string, string> = {
+    us: 'united states',
+    gb: 'united kingdom',
+    ca: 'canada',
+    de: 'germany',
+    fr: 'france',
+    au: 'australia',
+    in: 'india',
+  }
+
+  return countryMap[countryCode] || 'united states'
 }
 
 function computeMatchScore(resumeText: string, title: string, description?: string): number {
@@ -96,17 +124,38 @@ export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters
   }
 
   const role = inferRole(resumeText)
-  const location = inferLocation(resumeText)
+  const location = inferLocation(resumeText, filters.country)
   const keywordPart = filters.keyword.trim() ? `${filters.keyword.trim()} ` : ''
   const query = `${keywordPart}${role} jobs in ${location}`
 
+  // Build API parameters using proper parameter names
   const params = new URLSearchParams({
     query,
-    page: '1',
-    num_pages: '1',
+    page: String(filters.page || 1),
+    num_pages: String(filters.numPages || 1),
     country: filters.country,
     date_posted: filters.datePosted,
   })
+
+  // Add work_from_home parameter if remote only
+  if (filters.remoteOnly) {
+    params.append('work_from_home', 'true')
+  }
+
+  // Add employment_types if specific type selected
+  if (filters.employmentType !== 'all') {
+    params.append('employment_types', filters.employmentType)
+  }
+
+  // Add job_requirements if specified
+  if (filters.jobRequirements) {
+    params.append('job_requirements', filters.jobRequirements)
+  }
+
+  // Add radius if specified
+  if (filters.radius) {
+    params.append('radius', String(filters.radius))
+  }
 
   const response = await fetch(`${RAPID_API_URL}?${params.toString()}`, {
     method: 'GET',
@@ -124,8 +173,9 @@ export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters
   const payload = (await response.json()) as JSearchResponse
   const jobs = payload?.data || []
 
+  // Map and normalize jobs (API already filtered by remote/employment type)
   const normalizedJobs = jobs
-    .slice(0, 8)
+    .slice(0, 10)
     .map((job, index) => ({
       id: job.job_id || `${job.job_title || 'job'}-${index}`,
       title: job.job_title || 'Untitled role',
@@ -141,20 +191,6 @@ export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters
       match: computeMatchScore(resumeText, job.job_title || '', job.job_description),
     }))
 
-  return normalizedJobs
-    .filter((job) => {
-      if (filters.remoteOnly && !job.isRemote) {
-        return false
-      }
-
-      if (filters.employmentType !== 'all') {
-        const normalizedType = job.employmentType.toLowerCase()
-        if (!normalizedType.includes(filters.employmentType.replace('-', ''))) {
-          return false
-        }
-      }
-
-      return true
-    })
-    .sort((a, b) => b.match - a.match)
+  // Sort by match score (API already handles most filtering)
+  return normalizedJobs.sort((a, b) => b.match - a.match)
 }

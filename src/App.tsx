@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Target, Moon, Sun, Briefcase } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Target, Moon, Sun, Briefcase, SlidersHorizontal, X } from 'lucide-react'
 import ResumUploader from './components/ResumeUploader'
 import JobDescriptionInput from './components/JobDescriptionInput'
 import AnalysisResults from './components/AnalysisResults'
@@ -28,6 +28,32 @@ function App() {
     employmentType: 'all',
     keyword: '',
   })
+  const [showFilters, setShowFilters] = useState(false)
+  const filtersRef = useRef<HTMLDivElement>(null)
+
+  // Detect user's country on mount
+  useEffect(() => {
+    const detectCountry = async () => {
+      try {
+        const response = await fetch('https://ipapi.co/json/')
+        if (response.ok) {
+          const data = await response.json()
+          const countryCode = data.country_code?.toLowerCase()
+          
+          // Only update if it's a supported country
+          const supportedCountries = ['us', 'gb', 'ca', 'de', 'fr', 'au', 'in']
+          if (countryCode && supportedCountries.includes(countryCode)) {
+            setJobsFilters((prev) => ({ ...prev, country: countryCode }))
+          }
+        }
+      } catch (error) {
+        // Silently fail and keep default 'us'
+        console.log('Could not detect country, using default')
+      }
+    }
+
+    detectCountry()
+  }, [])
 
   useEffect(() => {
     if (!resumeFile || !resumeFile.type.includes('pdf')) {
@@ -42,6 +68,22 @@ function App() {
       URL.revokeObjectURL(objectUrl)
     }
   }, [resumeFile])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filtersRef.current && !filtersRef.current.contains(event.target as Node)) {
+        setShowFilters(false)
+      }
+    }
+
+    if (showFilters) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showFilters])
 
   useEffect(() => {
     if (!resumeText.trim()) {
@@ -254,9 +296,119 @@ function App() {
               <aside className="w-64 xl:w-72">
                 <div className="sticky top-20">
                   <div className="card p-3">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Briefcase className="w-4 h-4 text-gray-700 dark:text-dark-text-secondary" />
-                      <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Matching Jobs</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-gray-700 dark:text-dark-text-secondary" />
+                        <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Matching Jobs</h3>
+                      </div>
+                      <div className="relative" ref={filtersRef}>
+                        <button
+                          onClick={() => setShowFilters(!showFilters)}
+                          className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-dark-card-hover transition-colors"
+                          title="Filter jobs"
+                        >
+                          <SlidersHorizontal className="w-4 h-4 text-gray-600 dark:text-dark-text-secondary" />
+                        </button>
+
+                        {showFilters && (
+                          <div className="absolute right-0 top-full mt-2 w-56 card p-3 space-y-2.5 shadow-xl border border-gray-200 dark:border-dark-border z-50">
+                            <div className="flex items-center justify-between mb-1">
+                              <h4 className="text-xs font-semibold text-gray-900 dark:text-white">Filters</h4>
+                              <button
+                                onClick={() => setShowFilters(false)}
+                                className="text-gray-400 dark:text-dark-text-secondary hover:text-gray-600 dark:hover:text-white transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-gray-600 dark:text-dark-text-secondary mb-0.5">
+                                Country
+                              </label>
+                              <select
+                                value={jobsFilters.country}
+                                onChange={(e) => setJobsFilters((prev) => ({ ...prev, country: e.target.value }))}
+                                className="input-field text-xs py-1 w-full"
+                              >
+                                <option value="us">🇺🇸 United States</option>
+                                <option value="gb">🇬🇧 United Kingdom</option>
+                                <option value="ca">🇨🇦 Canada</option>
+                                <option value="de">🇩🇪 Germany</option>
+                                <option value="fr">🇫🇷 France</option>
+                                <option value="au">🇦🇺 Australia</option>
+                                <option value="in">🇮🇳 India</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-gray-600 dark:text-dark-text-secondary mb-0.5">
+                                Date Posted
+                              </label>
+                              <select
+                                value={jobsFilters.datePosted}
+                                onChange={(e) =>
+                                  setJobsFilters((prev) => ({
+                                    ...prev,
+                                    datePosted: e.target.value as JobsFilters['datePosted'],
+                                  }))
+                                }
+                                className="input-field text-xs py-1 w-full"
+                              >
+                                <option value="all">All time</option>
+                                <option value="month">Past month</option>
+                                <option value="week">Past week</option>
+                                <option value="3days">Past 3 days</option>
+                                <option value="today">Today</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-gray-600 dark:text-dark-text-secondary mb-0.5">
+                                Employment Type
+                              </label>
+                              <select
+                                value={jobsFilters.employmentType}
+                                onChange={(e) =>
+                                  setJobsFilters((prev) => ({
+                                    ...prev,
+                                    employmentType: e.target.value as JobsFilters['employmentType'],
+                                  }))
+                                }
+                                className="input-field text-xs py-1 w-full"
+                              >
+                                <option value="all">All types</option>
+                                <option value="FULLTIME">Full-time</option>
+                                <option value="PARTTIME">Part-time</option>
+                                <option value="CONTRACTOR">Contract</option>
+                                <option value="INTERN">Internship</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-gray-600 dark:text-dark-text-secondary mb-0.5">
+                                Keyword
+                              </label>
+                              <input
+                                value={jobsFilters.keyword}
+                                onChange={(e) => setJobsFilters((prev) => ({ ...prev, keyword: e.target.value }))}
+                                placeholder="e.g. react"
+                                className="input-field text-xs py-1 w-full"
+                              />
+                            </div>
+
+                            <label className="flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-dark-text-secondary cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={jobsFilters.remoteOnly}
+                                onChange={(e) => setJobsFilters((prev) => ({ ...prev, remoteOnly: e.target.checked }))}
+                                className="rounded border-gray-300 dark:border-dark-border w-3 h-3"
+                              />
+                              Remote only
+                            </label>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -301,99 +453,6 @@ function App() {
                         </a>
                       ))}
                     </div>
-                  </div>
-                </div>
-              </aside>
-
-              <aside className="w-56 xl:w-64">
-                <div className="sticky top-20">
-                  <div className="card p-3 space-y-3">
-                    <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Job Filters</h3>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
-                        Country
-                      </label>
-                      <select
-                        value={jobsFilters.country}
-                        onChange={(e) => setJobsFilters((prev) => ({ ...prev, country: e.target.value }))}
-                        className="input-field text-sm py-1.5"
-                      >
-                        <option value="us">United States</option>
-                        <option value="gb">United Kingdom</option>
-                        <option value="ca">Canada</option>
-                        <option value="de">Germany</option>
-                        <option value="fr">France</option>
-                        <option value="au">Australia</option>
-                        <option value="in">India</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
-                        Date Posted
-                      </label>
-                      <select
-                        value={jobsFilters.datePosted}
-                        onChange={(e) =>
-                          setJobsFilters((prev) => ({
-                            ...prev,
-                            datePosted: e.target.value as JobsFilters['datePosted'],
-                          }))
-                        }
-                        className="input-field text-sm py-1.5"
-                      >
-                        <option value="all">All time</option>
-                        <option value="month">Past month</option>
-                        <option value="week">Past week</option>
-                        <option value="3days">Past 3 days</option>
-                        <option value="today">Today</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
-                        Employment Type
-                      </label>
-                      <select
-                        value={jobsFilters.employmentType}
-                        onChange={(e) =>
-                          setJobsFilters((prev) => ({
-                            ...prev,
-                            employmentType: e.target.value as JobsFilters['employmentType'],
-                          }))
-                        }
-                        className="input-field text-sm py-1.5"
-                      >
-                        <option value="all">All types</option>
-                        <option value="full-time">Full-time</option>
-                        <option value="part-time">Part-time</option>
-                        <option value="contract">Contract</option>
-                        <option value="internship">Internship</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
-                        Keyword
-                      </label>
-                      <input
-                        value={jobsFilters.keyword}
-                        onChange={(e) => setJobsFilters((prev) => ({ ...prev, keyword: e.target.value }))}
-                        placeholder="e.g. react"
-                        className="input-field text-sm py-1.5"
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-dark-text-secondary">
-                      <input
-                        type="checkbox"
-                        checked={jobsFilters.remoteOnly}
-                        onChange={(e) => setJobsFilters((prev) => ({ ...prev, remoteOnly: e.target.checked }))}
-                        className="rounded border-gray-300 dark:border-dark-border"
-                      />
-                      Remote only
-                    </label>
                   </div>
                 </div>
               </aside>

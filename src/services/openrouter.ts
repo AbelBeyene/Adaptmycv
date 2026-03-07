@@ -1,8 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 
-// Configure PDF.js worker to use local worker bundle
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+// Configure PDF.js worker - use CDN for better browser compatibility
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+}
 
 const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
 const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
