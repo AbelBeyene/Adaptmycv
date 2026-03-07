@@ -1,5 +1,6 @@
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-const API_URL = import.meta.env.VITE_GEMINI_API_URL
+const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
+const MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001'
 
 export interface AnalysisData {
   matchScore: number
@@ -9,22 +10,22 @@ export interface AnalysisData {
   recommendations: string[]
 }
 
-async function callGeminiAPI(prompt: string): Promise<string> {
+async function callOpenRouterAPI(prompt: string): Promise<string> {
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-goog-api-key': API_KEY,
+        Authorization: `Bearer ${API_KEY}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'AdaptMyCV',
       },
       body: JSON.stringify({
-        contents: [
+        model: MODEL,
+        messages: [
           {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
+            role: 'user',
+            content: prompt,
           },
         ],
       }),
@@ -35,16 +36,28 @@ async function callGeminiAPI(prompt: string): Promise<string> {
     }
 
     const data = await response.json()
-    return data.contents[0].parts[0].text
+    const content = data?.choices?.[0]?.message?.content
+
+    if (typeof content === 'string') {
+      return content
+    }
+
+    if (Array.isArray(content)) {
+      return content
+        .map((part: { type?: string; text?: string }) =>
+          part?.type === 'text' ? part.text || '' : ''
+        )
+        .join('')
+    }
+
+    throw new Error('Invalid response format from OpenRouter')
   } catch (error) {
-    console.error('Gemini API error:', error)
+    console.error('OpenRouter API error:', error)
     throw error
   }
 }
 
 export async function extractResumeText(file: File): Promise<string> {
-  // For now, return the file name as a placeholder
-  // TODO: Implement PDF/DOCX parsing using libraries like pdf-parse, mammoth
   return `Resume file: ${file.name}\nFile size: ${(file.size / 1024).toFixed(2)}KB\n\nNote: Full resume text extraction coming soon with PDF and DOCX parsing libraries.`
 }
 
@@ -77,17 +90,15 @@ Requirements:
 - Return ONLY valid JSON, no additional text`
 
   try {
-    const response = await callGeminiAPI(analysisPrompt)
-    
-    // Parse the JSON response
+    const response = await callOpenRouterAPI(analysisPrompt)
+
     const jsonMatch = response.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       throw new Error('Invalid response format from API')
     }
-    
+
     const analysis = JSON.parse(jsonMatch[0])
-    
-    // Validate the response structure
+
     if (
       typeof analysis.matchScore !== 'number' ||
       !Array.isArray(analysis.hardSkillsMatch) ||
@@ -125,7 +136,7 @@ Provide exactly 3 NEW actionable recommendations. Return as a JSON array of stri
 ["recommendation 1", "recommendation 2", "recommendation 3"]`
 
   try {
-    const response = await callGeminiAPI(prompt)
+    const response = await callOpenRouterAPI(prompt)
     const jsonMatch = response.match(/\[[\s\S]*\]/)
     if (!jsonMatch) {
       throw new Error('Invalid response format')

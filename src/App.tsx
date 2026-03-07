@@ -3,7 +3,7 @@ import { Target, Moon, Sun } from 'lucide-react'
 import ResumUploader from './components/ResumeUploader'
 import JobDescriptionInput from './components/JobDescriptionInput'
 import AnalysisResults from './components/AnalysisResults'
-import { extractResumeText } from './services/gemini'
+import { extractResumeText } from './services/openrouter'
 import './App.css'
 
 type AppStep = 'upload' | 'job' | 'results'
@@ -36,7 +36,7 @@ function App() {
 
   return (
     <div className={isDark ? 'dark' : ''}>
-      <div className="min-h-screen bg-gradient-to-br from-white to-gray-50 dark:from-dark-bg dark:to-dark-card transition-colors duration-200">
+      <div className="min-h-screen bg-gradient-to-br from-white to-gray-50 dark:from-dark-bg dark:to-dark-card text-gray-900 dark:text-dark-text transition-colors duration-200">
         {/* Header */}
         <header className="sticky top-0 z-50 backdrop-blur-lg bg-white/80 dark:bg-dark-bg/80 border-b border-gray-200 dark:border-dark-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">

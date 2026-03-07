@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Download, RefreshCw, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { analyzeResumeJobMatch, AnalysisData } from '../services/gemini'
+import { analyzeResumeJobMatch, AnalysisData } from '../services/openrouter'
 
 interface AnalysisResultsProps {
   resumeText: string
@@ -89,7 +89,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
                 Match Score
               </p>
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-bold">{analysis.matchScore}%</span>
+                <span className="text-5xl font-bold text-gray-900 dark:text-white">{analysis.matchScore}%</span>
                 <span className="text-gray-600 dark:text-dark-text-secondary">match</span>
               </div>
               <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-3">
@@ -104,7 +104,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
                 }}
               />
               <div className="relative w-32 h-32 rounded-full bg-white dark:bg-dark-card flex items-center justify-center">
-                <span className="text-3xl font-bold">{analysis.matchScore}%</span>
+                <span className="text-3xl font-bold text-gray-900 dark:text-white">{analysis.matchScore}%</span>
               </div>
             </div>
           </div>
@@ -117,7 +117,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-            <h3 className="font-semibold">Matched Skills</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white">Matched Skills</h3>
           </div>
           <div className="space-y-2">
             {analysis.hardSkillsMatch.map((skill) => (
@@ -143,11 +143,11 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
         <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-            <h3 className="font-semibold">Missing Skills</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white">Missing Skills</h3>
           </div>
           <div className="space-y-2">
             {analysis.missingSkills.map((skill) => (
-              <div key={skill} className="flex items-center gap-2 text-sm opacity-75">
+              <div key={skill} className="flex items-center gap-2 text-sm text-gray-700 dark:text-white opacity-75 dark:opacity-100">
                 <div className="w-2 h-2 rounded-full bg-orange-600 dark:bg-orange-400" />
                 <span>{skill}</span>
               </div>
@@ -163,7 +163,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <h3 className="font-semibold">Recommendations to Improve Match</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">Recommendations to Improve Match</h3>
         </div>
         <div className="space-y-3">
           {analysis.recommendations.map((rec, index) => (
@@ -181,7 +181,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
 
       {/* Job Info */}
       <div className="card bg-gray-50 dark:bg-dark-border/50">
-        <h3 className="font-semibold mb-3">Job Description</h3>
+        <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">Job Description</h3>
         <p className="text-sm text-gray-600 dark:text-dark-text-secondary line-clamp-3">
           {jobDescription}
         </p>

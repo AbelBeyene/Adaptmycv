@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/components/analysisresults.tsx","./src/components/jobdescriptioninput.tsx","./src/components/resumeuploader.tsx","./src/services/gemini.ts","./vite.config.ts","./vite-env.d.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/analysisresults.tsx","./src/components/jobdescriptioninput.tsx","./src/components/resumeuploader.tsx","./src/services/openrouter.ts","./vite.config.ts","./vite-env.d.ts"],"version":"5.9.3"}
