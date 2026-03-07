@@ -62,12 +62,6 @@ export default function JobDescriptionInput({ onSubmit, onBack }: JobDescription
     }
   }
 
-  const exampleJobs = [
-    'Senior React Developer - 5+ years experience with TypeScript',
-    'Full Stack Engineer - Node.js and React, AWS deployment experience',
-    'Product Manager - B2B SaaS background required',
-  ]
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-8">
@@ -135,20 +129,6 @@ export default function JobDescriptionInput({ onSubmit, onBack }: JobDescription
               </p>
             )}
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Quick Examples:</p>
-          {exampleJobs.map((example, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => setJobDescription(example)}
-              className="text-left p-3 rounded-lg border border-gray-200 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-card transition-colors"
-            >
-              <p className="text-sm font-medium">{example}</p>
-            </button>
-          ))}
         </div>
 
         <div className="flex gap-3 pt-4">

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Moon, Sun } from 'lucide-react'
+import { Target, Moon, Sun, Briefcase } from 'lucide-react'
 import ResumUploader from './components/ResumeUploader'
 import JobDescriptionInput from './components/JobDescriptionInput'
 import AnalysisResults from './components/AnalysisResults'
 import { extractResumeText } from './services/openrouter'
+import { fetchMatchingJobs, type MatchingJob, type JobsFilters } from './services/jobs'
 import './App.css'
 import type { PrioritizedRecommendation } from './components/AnalysisResults'
 
@@ -17,6 +18,16 @@ function App() {
   const [isDark, setIsDark] = useState(true)
   const [resumePreviewUrl, setResumePreviewUrl] = useState<string | null>(null)
   const [sidebarRecommendations, setSidebarRecommendations] = useState<PrioritizedRecommendation[]>([])
+  const [matchedJobs, setMatchedJobs] = useState<MatchingJob[]>([])
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false)
+  const [jobsError, setJobsError] = useState<string | null>(null)
+  const [jobsFilters, setJobsFilters] = useState<JobsFilters>({
+    country: 'us',
+    datePosted: 'week',
+    remoteOnly: false,
+    employmentType: 'all',
+    keyword: '',
+  })
 
   useEffect(() => {
     if (!resumeFile || !resumeFile.type.includes('pdf')) {
@@ -31,6 +42,31 @@ function App() {
       URL.revokeObjectURL(objectUrl)
     }
   }, [resumeFile])
+
+  useEffect(() => {
+    if (!resumeText.trim()) {
+      setMatchedJobs([])
+      setJobsError(null)
+      setIsLoadingJobs(false)
+      return
+    }
+
+    const loadMatchingJobs = async () => {
+      try {
+        setIsLoadingJobs(true)
+        setJobsError(null)
+        const jobs = await fetchMatchingJobs(resumeText, jobsFilters)
+        setMatchedJobs(jobs)
+      } catch (error) {
+        setJobsError(error instanceof Error ? error.message : 'Failed to load matching jobs')
+        setMatchedJobs([])
+      } finally {
+        setIsLoadingJobs(false)
+      }
+    }
+
+    loadMatchingJobs()
+  }, [resumeText, jobsFilters])
 
   const handleResumeUpload = async (file: File) => {
     setResumeFile(file)
@@ -53,6 +89,9 @@ function App() {
     setJobDescription('')
     setResumePreviewUrl(null)
     setSidebarRecommendations([])
+    setMatchedJobs([])
+    setJobsError(null)
+    setIsLoadingJobs(false)
   }
 
   const getRecommendationColorClasses = (severity: PrioritizedRecommendation['severity']) => {
@@ -74,11 +113,9 @@ function App() {
         <header className="sticky top-0 z-50 backdrop-blur-lg bg-white/80 dark:bg-dark-bg/80 border-b border-gray-200 dark:border-dark-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img
-                src="/logo.svg"
-                alt="AdaptMyCV logo"
-                className="w-10 h-10 rounded-lg object-cover"
-              />
+              <div className="w-10 h-10 rounded-lg bg-black dark:bg-white flex items-center justify-center">
+                <Target className="w-6 h-6 text-white dark:text-black" />
+              </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">AdaptMyCV</h1>
                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">Tailor your resume instantly</p>
@@ -163,55 +200,204 @@ function App() {
             </div>
           </main>
 
-          {/* Right Sidebar - Resume Preview */}
+          {/* Right Side Columns */}
           {resumeFile && (
-            <aside className="hidden lg:block w-72 xl:w-80 flex-shrink-0">
-              <div className="sticky top-20 space-y-3">
-                <div className="card p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Resume</h3>
-                    <span className="text-xs text-gray-600 dark:text-dark-text-secondary truncate max-w-[60%]">
-                      {resumeFile.name}
-                    </span>
+            <div className="hidden lg:flex gap-3 flex-shrink-0">
+              <aside className="w-64 xl:w-72">
+                <div className="sticky top-20 space-y-3">
+                  <div className="card p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Resume</h3>
+                      <span className="text-xs text-gray-600 dark:text-dark-text-secondary truncate max-w-[60%]">
+                        {resumeFile.name}
+                      </span>
+                    </div>
+
+                    {resumePreviewUrl ? (
+                      <div className="rounded border border-gray-200 dark:border-dark-border overflow-hidden bg-white dark:bg-dark-card">
+                        <iframe
+                          src={resumePreviewUrl}
+                          title="Resume preview"
+                          className="w-full h-80"
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-card/50 p-3">
+                        <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
+                          Preview available for PDF files only.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
-                  {resumePreviewUrl ? (
-                    <div className="rounded border border-gray-200 dark:border-dark-border overflow-hidden bg-white dark:bg-dark-card">
-                      <iframe
-                        src={resumePreviewUrl}
-                        title="Resume preview"
-                        className="w-full h-80"
-                      />
-                    </div>
-                  ) : (
-                    <div className="rounded border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-card/50 p-3">
-                      <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                        Preview available for PDF files only.
-                      </p>
+                  {currentStep === 'results' && sidebarRecommendations.length > 0 && (
+                    <div className="card p-3">
+                      <h3 className="font-semibold text-sm text-gray-900 dark:text-white mb-3">
+                        Recommendations to Improve Match
+                      </h3>
+                      <div className="space-y-2">
+                        {sidebarRecommendations.map((rec, index) => (
+                          <div
+                            key={`${rec.text}-${index}`}
+                            className={`rounded-lg border p-2 ${getRecommendationColorClasses(rec.severity)}`}
+                          >
+                            <p className="text-xs font-semibold uppercase tracking-wide mb-1">{rec.severity}</p>
+                            <p className="text-sm leading-relaxed">{rec.text}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
+              </aside>
 
-                {currentStep === 'results' && sidebarRecommendations.length > 0 && (
+              <aside className="w-64 xl:w-72">
+                <div className="sticky top-20">
                   <div className="card p-3">
-                    <h3 className="font-semibold text-sm text-gray-900 dark:text-white mb-3">
-                      Recommendations to Improve Match
-                    </h3>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Briefcase className="w-4 h-4 text-gray-700 dark:text-dark-text-secondary" />
+                      <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Matching Jobs</h3>
+                    </div>
+
                     <div className="space-y-2">
-                      {sidebarRecommendations.map((rec, index) => (
-                        <div
-                          key={`${rec.text}-${index}`}
-                          className={`rounded-lg border p-2 ${getRecommendationColorClasses(rec.severity)}`}
-                        >
-                          <p className="text-xs font-semibold uppercase tracking-wide mb-1">{rec.severity}</p>
-                          <p className="text-sm leading-relaxed">{rec.text}</p>
+                      {isLoadingJobs && (
+                        <div className="space-y-2">
+                          {[1, 2, 3].map((item) => (
+                            <div key={item} className="h-16 rounded-lg bg-gray-200 dark:bg-dark-border animate-pulse" />
+                          ))}
                         </div>
+                      )}
+
+                      {!isLoadingJobs && jobsError && (
+                        <p className="text-xs text-red-600 dark:text-red-400">{jobsError}</p>
+                      )}
+
+                      {!isLoadingJobs && !jobsError && matchedJobs.length === 0 && (
+                        <p className="text-xs text-gray-600 dark:text-dark-text-secondary">Upload resume to start matching jobs analysis.</p>
+                      )}
+
+                      {!isLoadingJobs && !jobsError && matchedJobs.map((job) => (
+                        <a
+                          key={job.id}
+                          href={job.applyLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-lg border border-gray-200 dark:border-dark-border p-2 bg-gray-50 dark:bg-dark-card/50 hover:bg-white dark:hover:bg-dark-card transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white leading-tight">{job.title}</p>
+                              <p className="text-xs text-gray-600 dark:text-dark-text-secondary mt-0.5">
+                                {job.company} • {job.location}
+                              </p>
+                              <p className="text-[11px] text-gray-500 dark:text-dark-text-secondary mt-1">
+                                {job.employmentType} • {job.posted}{job.isRemote ? ' • Remote' : ''}
+                              </p>
+                            </div>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 whitespace-nowrap">
+                              {job.match}%
+                            </span>
+                          </div>
+                        </a>
                       ))}
                     </div>
                   </div>
-                )}
-              </div>
-            </aside>
+                </div>
+              </aside>
+
+              <aside className="w-56 xl:w-64">
+                <div className="sticky top-20">
+                  <div className="card p-3 space-y-3">
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Job Filters</h3>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
+                        Country
+                      </label>
+                      <select
+                        value={jobsFilters.country}
+                        onChange={(e) => setJobsFilters((prev) => ({ ...prev, country: e.target.value }))}
+                        className="input-field text-sm py-1.5"
+                      >
+                        <option value="us">United States</option>
+                        <option value="gb">United Kingdom</option>
+                        <option value="ca">Canada</option>
+                        <option value="de">Germany</option>
+                        <option value="fr">France</option>
+                        <option value="au">Australia</option>
+                        <option value="in">India</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
+                        Date Posted
+                      </label>
+                      <select
+                        value={jobsFilters.datePosted}
+                        onChange={(e) =>
+                          setJobsFilters((prev) => ({
+                            ...prev,
+                            datePosted: e.target.value as JobsFilters['datePosted'],
+                          }))
+                        }
+                        className="input-field text-sm py-1.5"
+                      >
+                        <option value="all">All time</option>
+                        <option value="month">Past month</option>
+                        <option value="week">Past week</option>
+                        <option value="3days">Past 3 days</option>
+                        <option value="today">Today</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
+                        Employment Type
+                      </label>
+                      <select
+                        value={jobsFilters.employmentType}
+                        onChange={(e) =>
+                          setJobsFilters((prev) => ({
+                            ...prev,
+                            employmentType: e.target.value as JobsFilters['employmentType'],
+                          }))
+                        }
+                        className="input-field text-sm py-1.5"
+                      >
+                        <option value="all">All types</option>
+                        <option value="full-time">Full-time</option>
+                        <option value="part-time">Part-time</option>
+                        <option value="contract">Contract</option>
+                        <option value="internship">Internship</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-dark-text-secondary mb-1">
+                        Keyword
+                      </label>
+                      <input
+                        value={jobsFilters.keyword}
+                        onChange={(e) => setJobsFilters((prev) => ({ ...prev, keyword: e.target.value }))}
+                        placeholder="e.g. react"
+                        className="input-field text-sm py-1.5"
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-dark-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={jobsFilters.remoteOnly}
+                        onChange={(e) => setJobsFilters((prev) => ({ ...prev, remoteOnly: e.target.checked }))}
+                        className="rounded border-gray-300 dark:border-dark-border"
+                      />
+                      Remote only
+                    </label>
+                  </div>
+                </div>
+              </aside>
+            </div>
           )}
         </div>
 
