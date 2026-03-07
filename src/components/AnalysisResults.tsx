@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Download, RefreshCw, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { analyzeResumeJobMatch, AnalysisData } from '../services/openrouter'
+import { Download, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, FileText } from 'lucide-react'
+import { analyzeResumeJobMatch, AnalysisData, generateImprovedResume } from '../services/openrouter'
 
 interface AnalysisResultsProps {
   resumeText: string
@@ -12,17 +12,37 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [improvedResume, setImprovedResume] = useState('')
+  const [isGeneratingImprovedResume, setIsGeneratingImprovedResume] = useState(false)
+  const [improvedResumeError, setImprovedResumeError] = useState<string | null>(null)
 
   useEffect(() => {
     const runAnalysis = async () => {
       try {
         setIsAnalyzing(true)
         setError(null)
+        setImprovedResume('')
+        setImprovedResumeError(null)
+        setIsGeneratingImprovedResume(true)
+
         const result = await analyzeResumeJobMatch(resumeText, jobDescription)
         setAnalysis(result)
+
+        try {
+          const improved = await generateImprovedResume(resumeText, jobDescription)
+          setImprovedResume(improved)
+        } catch (improvedError) {
+          console.error('Improved CV generation failed:', improvedError)
+          setImprovedResumeError(
+            improvedError instanceof Error ? improvedError.message : 'Failed to generate improved CV'
+          )
+        } finally {
+          setIsGeneratingImprovedResume(false)
+        }
       } catch (err) {
         console.error('Analysis failed:', err)
         setError(err instanceof Error ? err.message : 'Failed to analyze resume')
+        setIsGeneratingImprovedResume(false)
       } finally {
         setIsAnalyzing(false)
       }
@@ -185,6 +205,29 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset }:
         <p className="text-sm text-gray-600 dark:text-dark-text-secondary line-clamp-3">
           {jobDescription}
         </p>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          <h3 className="font-semibold text-gray-900 dark:text-white">Improved CV (Tailored to This Job)</h3>
+        </div>
+
+        {isGeneratingImprovedResume ? (
+          <div className="rounded-lg border border-gray-200 dark:border-dark-border p-4 bg-gray-50 dark:bg-dark-card/50">
+            <p className="text-sm text-gray-600 dark:text-dark-text-secondary">Generating improved CV draft...</p>
+          </div>
+        ) : improvedResumeError ? (
+          <div className="rounded-lg border border-red-200 dark:border-red-900/50 p-4 bg-red-50 dark:bg-red-900/20">
+            <p className="text-sm text-red-700 dark:text-red-300">{improvedResumeError}</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-gray-200 dark:border-dark-border p-4 bg-white dark:bg-dark-card">
+            <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-white font-sans leading-relaxed max-h-96 overflow-auto">
+              {improvedResume || 'No improved CV generated yet.'}
+            </pre>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

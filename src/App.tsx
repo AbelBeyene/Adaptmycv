@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Target, Moon, Sun } from 'lucide-react'
 import ResumUploader from './components/ResumeUploader'
 import JobDescriptionInput from './components/JobDescriptionInput'
@@ -14,6 +14,21 @@ function App() {
   const [resumeText, setResumeText] = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [isDark, setIsDark] = useState(true)
+  const [resumePreviewUrl, setResumePreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!resumeFile || !resumeFile.type.includes('pdf')) {
+      setResumePreviewUrl(null)
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(resumeFile)
+    setResumePreviewUrl(objectUrl)
+
+    return () => {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }, [resumeFile])
 
   const handleResumeUpload = async (file: File) => {
     setResumeFile(file)
@@ -31,7 +46,9 @@ function App() {
   const handleReset = () => {
     setCurrentStep('upload')
     setResumeFile(null)
+    setResumeText('')
     setJobDescription('')
+    setResumePreviewUrl(null)
   }
 
   return (
@@ -101,6 +118,33 @@ function App() {
               <span>Analysis</span>
             </div>
           </div>
+
+          {resumeFile && (
+            <div className="card mb-8">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Uploaded Resume</h3>
+                <span className="text-xs text-gray-600 dark:text-dark-text-secondary truncate max-w-[60%]">
+                  {resumeFile.name}
+                </span>
+              </div>
+
+              {resumePreviewUrl ? (
+                <div className="rounded-lg border border-gray-200 dark:border-dark-border overflow-hidden bg-white dark:bg-dark-card">
+                  <iframe
+                    src={resumePreviewUrl}
+                    title="Resume preview"
+                    className="w-full h-64"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-card/50 p-4">
+                  <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                    Live preview is available for PDF files. Your file is uploaded and ready for analysis.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Content */}
           <div className="slide-in">

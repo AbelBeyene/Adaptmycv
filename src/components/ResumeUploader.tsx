@@ -28,6 +28,7 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
     try {
       await onUpload(file)
     } catch (err) {
+      console.error('Resume processing error:', err)
       setError(err instanceof Error ? err.message : 'Failed to process resume')
       setIsLoading(false)
     }
@@ -97,7 +98,7 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
             {isLoading ? 'Processing resume...' : 'Drop your resume here'}
           </h3>
           <p className="text-gray-600 dark:text-dark-text-secondary text-center">
-            {isLoading ? 'Extracting text and preparing analysis...' : 'or click to browse. Supports PDF, DOCX, DOC'}
+            {isLoading ? 'Extracting text from your file. This may take a moment...' : 'or click to browse. Supports PDF, DOCX, DOC'}
           </p>
           <p className="text-sm text-gray-500 dark:text-dark-text-secondary mt-2">
             Max file size: 10MB
