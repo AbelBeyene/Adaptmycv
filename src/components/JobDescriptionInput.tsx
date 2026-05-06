@@ -1,17 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Link as LinkIcon, Zap } from 'lucide-react'
 import { extractJobDescriptionFromUrl } from '../services/openrouter'
 
 interface JobDescriptionInputProps {
   onSubmit: (text: string) => void | Promise<void>
   onBack: () => void
+  initialJobLink?: string
 }
 
-export default function JobDescriptionInput({ onSubmit, onBack }: JobDescriptionInputProps) {
+export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink = '' }: JobDescriptionInputProps) {
   const [jobDescription, setJobDescription] = useState('')
-  const [jobLink, setJobLink] = useState('')
+  const [jobLink, setJobLink] = useState(initialJobLink)
   const [isLoading, setIsLoading] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setJobLink(initialJobLink)
+  }, [initialJobLink])
 
   const handleFetchFromLink = async () => {
     if (!jobLink.trim()) {

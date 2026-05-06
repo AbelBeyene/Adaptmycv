@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Download, RefreshCw, AlertCircle, CheckCircle2, FileText, Copy, Check } from 'lucide-react'
-import { analyzeResumeJobMatch, AnalysisData, CoverLetterVariants, generateCoverLetter } from '../services/openrouter'
+import { Download, RefreshCw, AlertCircle, CheckCircle2, FileText, Copy, Check, Sparkles } from 'lucide-react'
+import {
+  analyzeResumeJobMatch,
+  AnalysisData,
+  CoverLetterVariants,
+  generateCoverLetter,
+} from '../services/openrouter'
 
 export interface PrioritizedRecommendation {
   text: string
@@ -11,6 +16,7 @@ interface AnalysisResultsProps {
   resumeText: string
   jobDescription: string
   onReset: () => void
+  onPrepareResume: () => void
   onRecommendationsUpdate?: (recommendations: PrioritizedRecommendation[]) => void
 }
 
@@ -30,7 +36,13 @@ function classifyRecommendationSeverity(text: string, index: number): Prioritize
   return index === 0 ? 'important' : 'normal'
 }
 
-export default function AnalysisResults({ resumeText, jobDescription, onReset, onRecommendationsUpdate }: AnalysisResultsProps) {
+export default function AnalysisResults({
+  resumeText,
+  jobDescription,
+  onReset,
+  onPrepareResume,
+  onRecommendationsUpdate,
+}: AnalysisResultsProps) {
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +97,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
         } finally {
           setIsGeneratingCoverLetter(false)
         }
+
       } catch (err) {
         console.error('Analysis failed:', err)
         setError(err instanceof Error ? err.message : 'Failed to analyze resume')
@@ -96,7 +109,7 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
     }
 
     runAnalysis()
-  }, [resumeText, jobDescription])
+  }, [resumeText, jobDescription, onRecommendationsUpdate])
 
   if (isAnalyzing) {
     return (
@@ -348,6 +361,34 @@ export default function AnalysisResults({ resumeText, jobDescription, onReset, o
             </div>
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="font-semibold text-gray-900 dark:text-white">Enhanced Resume</h3>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button
+              type="button"
+              onClick={onPrepareResume}
+              className="btn-primary flex items-center gap-1 px-2 py-1 text-xs"
+            >
+              <Sparkles className="w-4 h-4" />
+              Prepare Enhanced Resume
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 dark:border-dark-border p-4 bg-gray-50 dark:bg-dark-card/50">
+          <p className="text-sm font-medium text-gray-900 dark:text-white">
+            Prepare a role-specific resume on a separate page.
+          </p>
+          <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">
+            This optional step uses your ATS template and tailors the resume content to the job while keeping all claims factual.
+          </p>
+        </div>
       </div>
 
       {/* Actions */}

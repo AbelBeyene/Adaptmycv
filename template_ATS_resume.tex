@@ -1,0 +1,105 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[ngerman,english]{babel}
+\usepackage[a4paper,top=1.2cm,bottom=1.2cm,left=1.4cm,right=1.4cm]{geometry}
+\usepackage{enumitem}
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{tabularx}
+\usepackage{titlesec}
+
+\pagestyle{empty}
+\raggedbottom
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.2em, topsep=0pt, itemsep=0pt, parsep=0pt, partopsep=0pt}
+\setmainfont{Carlito}[Ligatures=TeX]
+
+\titleformat{\section}{\normalsize\bfseries}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{4pt}{3pt}
+
+\newcommand{\job}[4]{%
+  \textbf{#1} \hfill #2\\
+  \textit{#3} \hfill #4
+}
+
+\newcommand{\profilephoto}{%
+  \IfFileExists{profile.jpg}{\includegraphics[width=2.1cm,height=2.7cm,keepaspectratio]{profile.jpg}}{%
+  \fbox{\parbox[c][2.7cm][c]{2.1cm}{\centering \footnotesize Add\\profile.jpg}}}%
+}
+
+\begin{document}
+\selectlanguage{english}
+\small
+
+\begin{tabularx}{\textwidth}{@{}Xr@{}}
+\begin{minipage}[t]{\linewidth}
+\vspace{0pt}
+{\LARGE \textbf{[Full Name]}}\\
+\textbf{[Target Role Title]}\\
+[City, Country]\\
+\href{mailto:[email@example.com]}{[email@example.com]} \textbar\ 
+[phone number] \textbar\ 
+\href{https://[portfolio-domain]}{[portfolio-domain]} \textbar\ 
+\href{https://github.com/[username]}{github.com/[username]} \textbar\ 
+\href{https://linkedin.com/in/[profile]}{linkedin.com/in/[profile]}
+\end{minipage}
+&
+\begin{minipage}[t]{2.2cm}
+\vspace{1.1em}
+\raggedleft\profilephoto
+\end{minipage}
+\end{tabularx}
+
+\vspace{-0.2em}
+
+\section*{Professional Summary}
+[Short ATS-friendly summary with years of experience, core specializations, domains, and key technologies. Keep it concise and specific.]
+
+\section*{Education}
+\job{[Degree and Major]}{[MM/YYYY -- MM/YYYY or Present]}{[University or Institution]}{[City, Country]}
+
+\vspace{0.25em}
+\job{[Degree and Major]}{[MM/YYYY -- MM/YYYY]}{[University or Institution]}{[City, Country]}
+
+\section*{Technical Skills}
+\textbf{Programming:} [Language 1], [Language 2], [Language 3]\\
+\textbf{Frontend:} [Frameworks, libraries, and styling tools]\\
+\textbf{Mobile:} [Mobile frameworks and platforms]\\
+\textbf{Backend:} [Backend frameworks, APIs, databases, cloud tools]\\
+\textbf{Architecture and Testing:} [Architecture patterns, testing approaches]\\
+\textbf{Tools:} [Version control, CI/CD, containers, OS, productivity tools]
+
+\section*{Work Experience}
+\job{[Job Title]}{[MM/YYYY -- MM/YYYY or Present]}{[Company]}{[City, Country or Remote]}
+\begin{itemize}
+  \item [Achievement or responsibility focused on impact, scope, or scale]
+  \item [Achievement or responsibility with measurable result when possible]
+  \item [Achievement or responsibility describing technologies, leadership, or ownership]
+\end{itemize}
+\vspace{0.6\baselineskip}
+
+\job{[Job Title]}{[MM/YYYY -- MM/YYYY]}{[Company]}{[City, Country or Remote]}
+\begin{itemize}
+  \item [Achievement or responsibility focused on impact, scope, or scale]
+  \item [Achievement or responsibility with measurable result when possible]
+  \item [Achievement or responsibility describing technologies, leadership, or ownership]
+\end{itemize}
+\vspace{0.6\baselineskip}
+
+\job{[Job Title]}{[MM/YYYY -- MM/YYYY]}{[Company]}{[City, Country or Remote]}
+\begin{itemize}
+  \item [Achievement or responsibility focused on impact, scope, or scale]
+  \item [Achievement or responsibility with measurable result when possible]
+\end{itemize}
+
+\section*{Projects}
+\textbf{[Project Name]} | [Tech stack, outcome, or purpose]\\
+\textbf{[Project Name]} | [Tech stack, outcome, or purpose]\\
+\textbf{[Project Name]} | [Tech stack, outcome, or purpose]\\
+\textbf{[Portfolio or GitHub Link]} | [Optional short note about the link]
+
+\section*{Languages}
+[Language]: [Level] \textbar\ [Language]: [Level] \textbar\ [Language]: [Level]
+
+\end{document}

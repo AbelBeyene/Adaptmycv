@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import atsResumeTemplate from '../../template_ATS_resume.tex?raw'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -20,62 +21,215 @@ export interface AnalysisData {
   recommendations: string[]
 }
 
-async function callOpenRouterAPI(prompt: string): Promise<string> {
+type OpenRouterMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+const OPENROUTER_MAX_RETRIES = 2
+const OPENROUTER_BASE_RETRY_DELAY_MS = 1500
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+function parseRetryAfterMs(retryAfterHeader: string | null): number | null {
+  if (!retryAfterHeader) {
+    return null
+  }
+
+  const asSeconds = Number(retryAfterHeader)
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+    return asSeconds * 1000
+  }
+
+  const asDate = Date.parse(retryAfterHeader)
+  if (Number.isNaN(asDate)) {
+    return null
+  }
+
+  return Math.max(0, asDate - Date.now())
+}
+
+function getFriendlyOpenRouterErrorMessage(message: string): string {
+  if (message.includes('API error: 429')) {
+    return 'The AI provider is rate-limiting requests right now. Please wait a moment and try again.'
+  }
+
+  if (message.includes('API error: 400')) {
+    return 'The AI provider rejected this request format. Please try again in a moment.'
+  }
+
+  return `API call failed: ${message}`
+}
+
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part
+        }
+
+        if (part && typeof part === 'object') {
+          const record = part as Record<string, unknown>
+          if (typeof record.text === 'string') {
+            return record.text
+          }
+          if (typeof record.content === 'string') {
+            return record.content
+          }
+        }
+
+        return ''
+      })
+      .join('')
+  }
+
+  if (content && typeof content === 'object') {
+    const record = content as Record<string, unknown>
+
+    if (typeof record.text === 'string') {
+      return record.text
+    }
+
+    if (typeof record.content === 'string') {
+      return record.content
+    }
+  }
+
+  return ''
+}
+
+async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = false): Promise<string> {
   try {
     if (!API_KEY || !API_URL) {
       throw new Error('OpenRouter API credentials not configured')
     }
 
     console.log('Calling OpenRouter API...', { model: MODEL, url: API_URL })
-    
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${API_KEY}`,
-        'HTTP-Referer': window.location.origin,
-        'X-Title': 'AdaptMyCV',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      }),
-    })
+    for (let attempt = 0; attempt <= OPENROUTER_MAX_RETRIES; attempt += 1) {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${API_KEY}`,
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'AdaptMyCV',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages,
+          ...(requireJson ? { response_format: { type: 'json_object' } } : {}),
+        }),
+      })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('API Response Error:', errorText)
-      throw new Error(`API error: ${response.status} ${response.statusText}`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('API Response Error:', errorText)
+
+        if (response.status === 429 && attempt < OPENROUTER_MAX_RETRIES) {
+          const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'))
+          const backoffMs = retryAfterMs ?? OPENROUTER_BASE_RETRY_DELAY_MS * (attempt + 1)
+          console.warn(`OpenRouter rate limited request. Retrying in ${backoffMs}ms...`)
+          await wait(backoffMs)
+          continue
+        }
+
+        throw new Error(`API error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      const primaryMessage = data?.choices?.[0]?.message
+      const directContent = extractTextFromContent(primaryMessage?.content)
+
+      if (directContent.trim()) {
+        return directContent
+      }
+
+      const fallbackText =
+        extractTextFromContent(data?.choices?.[0]?.text) ||
+        extractTextFromContent(data?.output_text) ||
+        extractTextFromContent(data?.response?.output_text)
+
+      if (fallbackText.trim()) {
+        return fallbackText
+      }
+
+      console.error('Unexpected OpenRouter response payload:', data)
+      throw new Error('Invalid response format from OpenRouter')
     }
 
-    const data = await response.json()
-    const content = data?.choices?.[0]?.message?.content
-
-    if (typeof content === 'string') {
-      return content
-    }
-
-    if (Array.isArray(content)) {
-      return content
-        .map((part: { type?: string; text?: string }) =>
-          part?.type === 'text' ? part.text || '' : ''
-        )
-        .join('')
-    }
-
-    throw new Error('Invalid response format from OpenRouter')
+    throw new Error('API error: 429 Too Many Requests')
   } catch (error) {
     console.error('OpenRouter API error:', error)
     if (error instanceof Error) {
-      throw new Error(`API call failed: ${error.message}`)
+      throw new Error(getFriendlyOpenRouterErrorMessage(error.message))
     }
     throw error
   }
+}
+
+function extractJsonCandidate(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim()
+  }
+
+  const firstObject = trimmed.indexOf('{')
+  const lastObject = trimmed.lastIndexOf('}')
+  if (firstObject !== -1 && lastObject > firstObject) {
+    return trimmed.slice(firstObject, lastObject + 1)
+  }
+
+  const firstArray = trimmed.indexOf('[')
+  const lastArray = trimmed.lastIndexOf(']')
+  if (firstArray !== -1 && lastArray > firstArray) {
+    return trimmed.slice(firstArray, lastArray + 1)
+  }
+
+  return null
+}
+
+async function parseJsonResponse<T>(raw: string, schemaHint: string): Promise<T> {
+  const candidate = extractJsonCandidate(raw)
+  if (candidate) {
+    try {
+      return JSON.parse(candidate) as T
+    } catch (parseError) {
+      console.warn('Initial JSON parse failed, attempting repair...', parseError)
+    }
+  }
+
+  const repairPrompt = [
+    {
+      role: 'system' as const,
+      content: 'You repair malformed API outputs into valid JSON. Return only valid JSON with no explanation.',
+    },
+    {
+      role: 'user' as const,
+      content: `Convert the following content into valid JSON matching this shape:\n${schemaHint}\n\nCONTENT:\n${raw}`,
+    },
+  ]
+
+  const repaired = await callOpenRouterAPI(repairPrompt, true)
+  const repairedCandidate = extractJsonCandidate(repaired)
+  if (!repairedCandidate) {
+    throw new Error('Invalid response format from API')
+  }
+
+  return JSON.parse(repairedCandidate) as T
 }
 
 async function extractPDFText(file: File): Promise<string> {
@@ -98,7 +252,7 @@ async function extractPDFText(file: File): Promise<string> {
         disableRange: true,
         // Fallback path for environments where worker dynamic import is blocked
         disableWorker,
-      } as any)
+      } as Parameters<typeof pdfjsLib.getDocument>[0])
 
     let loadingTask = createLoadingTask(false)
     let pdf
@@ -128,7 +282,7 @@ async function extractPDFText(file: File): Promise<string> {
       const page = await pdf.getPage(i)
       const textContent = await page.getTextContent()
       const pageText = textContent.items
-        .map((item: any) => item.str)
+        .map((item) => ('str' in item ? item.str : ''))
         .join(' ')
       textPages.push(pageText)
     }
@@ -263,16 +417,21 @@ Requirements:
 
   try {
     console.log('Sending analysis prompt to API...')
-    const response = await callOpenRouterAPI(analysisPrompt)
+    const response = await callOpenRouterAPI(
+      [{ role: 'user', content: analysisPrompt }],
+      true
+    )
     console.log('Received analysis response, length:', response.length)
-
-    const jsonMatch = response.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      console.error('Failed to extract JSON from response:', response)
-      throw new Error('Invalid response format from API')
-    }
-
-    const analysis = JSON.parse(jsonMatch[0])
+    const analysis = await parseJsonResponse<AnalysisData>(
+      response,
+      `{
+  "matchScore": 0,
+  "hardSkillsMatch": ["skill"],
+  "softSkillsMatch": ["skill"],
+  "missingSkills": ["skill"],
+  "recommendations": ["recommendation"]
+}`
+    )
     console.log('Parsed analysis:', analysis)
 
     if (
@@ -312,12 +471,11 @@ Provide exactly 3 NEW actionable recommendations. Return as a JSON array of stri
 ["recommendation 1", "recommendation 2", "recommendation 3"]`
 
   try {
-    const response = await callOpenRouterAPI(prompt)
-    const jsonMatch = response.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
-      throw new Error('Invalid response format')
-    }
-    return JSON.parse(jsonMatch[0])
+    const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], true)
+    return await parseJsonResponse<string[]>(
+      response,
+      `["recommendation 1", "recommendation 2", "recommendation 3"]`
+    )
   } catch (error) {
     console.error('Error generating recommendations:', error)
     return []
@@ -330,6 +488,14 @@ export interface CoverLetterVariants {
   naturalStyle: string
   personalStyle: string
 }
+
+export interface TailoredResumeLatex {
+  latex: string
+  summary: string
+  warnings: string[]
+}
+
+const LATEX_ONLINE_BASE_URL = 'https://latexonline.cc/compile'
 
 export async function generateCoverLetter(
   resumeText: string,
@@ -381,13 +547,16 @@ RESUME:
 ${resumeText}`
 
   try {
-    const response = await callOpenRouterAPI(prompt)
-    const jsonMatch = response.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Invalid response format from API')
-    }
-
-    const parsed = JSON.parse(jsonMatch[0])
+    const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], true)
+    const parsed = await parseJsonResponse<CoverLetterVariants>(
+      response,
+      `{
+  "dStyle": "text",
+  "tStyle": "text",
+  "naturalStyle": "text",
+  "personalStyle": "text"
+}`
+    )
     if (
       typeof parsed.dStyle !== 'string' ||
       typeof parsed.tStyle !== 'string' ||
@@ -407,4 +576,98 @@ ${resumeText}`
     console.error('Error generating cover letter:', error)
     throw error
   }
+}
+
+export async function generateTailoredResumeLatex(
+  resumeText: string,
+  jobDescription: string
+): Promise<TailoredResumeLatex> {
+  const prompt = `You are an expert resume writer, ATS optimizer, and LaTeX formatter.
+
+Create a professional ATS-friendly resume in LaTeX based ONLY on the candidate information found in the resume below, tailored to the target job description.
+
+You MUST use the provided LaTeX template as the base format. Preserve its overall structure, commands, section order, visual style, and ATS-friendly formatting unless a tiny adjustment is required for correctness or factual fit.
+
+Hard safety rules:
+- Do not invent employers, job titles, dates, degrees, certifications, projects, awards, locations, metrics, technologies, or achievements.
+- You may reorganize, shorten, clarify, and emphasize existing experience.
+- You may only mention skills, tools, and responsibilities that are explicitly present in the source resume or are directly supported by it.
+- If something is missing, omit it instead of guessing.
+- Maximize ATS alignment with the job description by prioritizing exact relevant keywords that already fit the candidate's real background.
+- Keep every claim truthful, concrete, and supportable from the source resume.
+
+Output requirements:
+- The LaTeX must compile as a standalone document.
+- Follow the supplied template's layout and helper commands.
+- Replace placeholder content with candidate-specific content.
+- Keep ATS-friendly section headings and plain text content.
+- Keep the formatting simple and machine-readable.
+- Escape LaTeX-sensitive characters correctly (%, &, $, #, _, ^, ~, {, }).
+- If a section in the template has no supported source information, keep the document valid and either omit that content carefully or use only truthful minimal content.
+
+IMPORTANT: Respond using ONLY this exact format with these XML tags — no other text before or after:
+
+<summary>1-2 sentence summary of the tailoring approach used</summary>
+<warnings>["optional factual caution or missing-info note"]</warnings>
+<latex>
+\\documentclass...complete LaTeX document...\\end{document}
+</latex>
+
+JOB DESCRIPTION:
+${jobDescription}
+
+LATEX TEMPLATE TO FOLLOW:
+${atsResumeTemplate}
+
+SOURCE RESUME:
+${resumeText}`
+
+  try {
+    const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], false)
+
+    const summaryMatch = response.match(/<summary>([\s\S]*?)<\/summary>/)
+    const warningsMatch = response.match(/<warnings>([\s\S]*?)<\/warnings>/)
+    const latexMatch = response.match(/<latex>\s*([\s\S]*?)\s*<\/latex>/)
+
+    const latex = latexMatch?.[1]?.trim() ?? ''
+    const summaryRaw = summaryMatch?.[1]?.trim() ?? ''
+    const warningsRaw = warningsMatch?.[1]?.trim() ?? '[]'
+
+    if (!latex || !latex.includes('\\documentclass')) {
+      throw new Error('No valid LaTeX document found in response')
+    }
+
+    let warnings: string[] = []
+    try {
+      const candidate = extractJsonCandidate(warningsRaw)
+      if (candidate) {
+        const parsed = JSON.parse(candidate)
+        if (Array.isArray(parsed)) {
+          warnings = parsed.filter((item: unknown) => typeof item === 'string')
+        }
+      }
+    } catch {
+      // non-critical — proceed with empty warnings
+    }
+
+    return {
+      summary: summaryRaw || 'Resume tailored to the job description using the ATS template.',
+      warnings,
+      latex,
+    }
+  } catch (error) {
+    console.error('Error generating tailored resume LaTeX:', error)
+    throw error
+  }
+}
+
+export function buildLatexPdfUrl(latex: string, filename = 'adapted-harvard-resume.pdf'): string {
+  const params = new URLSearchParams({
+    text: latex,
+    command: 'xelatex',
+    force: 'true',
+    download: filename,
+  })
+
+  return `${LATEX_ONLINE_BASE_URL}?${params.toString()}`
 }
