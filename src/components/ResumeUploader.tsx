@@ -9,7 +9,7 @@ interface SavedResume {
 
 interface ResumeUploaderProps {
   onUpload: (file: File) => Promise<void>
-  onResumeCached: (text: string) => void
+  onResumeCached: (text: string, fileName: string) => void
   resumeStoreKey: string
 }
 
@@ -123,7 +123,7 @@ export default function ResumeUploader({ onUpload, onResumeCached, resumeStoreKe
 
           <div className="flex gap-3">
             <button
-              onClick={() => onResumeCached(savedResume.text)}
+              onClick={() => onResumeCached(savedResume.text, savedResume.fileName)}
               className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
               <FileText className="w-4 h-4" />

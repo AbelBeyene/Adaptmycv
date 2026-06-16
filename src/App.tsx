@@ -16,6 +16,7 @@ function App() {
   const progressSteps: AppStep[] = ['upload', 'job', 'results']
   const [currentStep, setCurrentStep] = useState<AppStep>('upload')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [resumeFileName, setResumeFileName] = useState('')
   const [resumeText, setResumeText] = useState('')
   const [jobDescription, setJobDescription] = useState('')
   const [isDark, setIsDark] = useState(true)
@@ -188,6 +189,7 @@ function App() {
 
   const handleResumeUpload = async (file: File) => {
     setResumeFile(file)
+    setResumeFileName(file.name)
     const text = await extractResumeText(file)
     setResumeText(text)
     try {
@@ -199,8 +201,9 @@ function App() {
     setCurrentStep('job')
   }
 
-  const handleResumeCached = (text: string) => {
+  const handleResumeCached = (text: string, fileName: string) => {
     setResumeText(text)
+    setResumeFileName(fileName)
     setCurrentStep('job')
   }
 
@@ -216,6 +219,7 @@ function App() {
     window.localStorage.removeItem('adaptmycv-resume-studio-v1')
     setCurrentStep('upload')
     setResumeFile(null)
+    setResumeFileName('')
     setResumeText('')
     setJobDescription('')
     setResumePreviewUrl(null)
@@ -364,7 +368,7 @@ function App() {
               </div>
             </main>
 
-            {resumeFile && (
+            {resumeText && (
               <div className="hidden lg:flex gap-3 flex-shrink-0">
                 <aside className="w-64 xl:w-72">
                   <div className="space-y-3">
@@ -372,7 +376,7 @@ function App() {
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Resume</h3>
                         <span className="text-xs text-gray-600 dark:text-dark-text-secondary truncate max-w-[60%]">
-                          {resumeFile.name}
+                          {resumeFileName}
                         </span>
                       </div>
 
