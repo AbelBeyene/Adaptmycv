@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -14,6 +14,14 @@ import {
   generateTailoredResumeLatex,
   TailoredResumeLatex,
 } from '../services/openrouter'
+import {
+  allSectionsEmpty,
+  EMPTY_SECTIONS,
+  parseResumeSections,
+  rebuildLatexFromSections,
+  SECTION_ORDER,
+  type ResumeSections,
+} from '../lib/resumeSections'
 
 interface TailoredResumePrepProps {
   resumeText: string
@@ -23,71 +31,7 @@ interface TailoredResumePrepProps {
 
 type EditorPanel = 'sections' | 'latex' | 'ideas'
 
-type ResumeSections = {
-  professionalSummary: string
-  education: string
-  technicalSkills: string
-  workExperience: string
-  projects: string
-  languages: string
-}
-
 const STUDIO_CACHE_KEY = 'adaptmycv-resume-studio-v1'
-
-const sectionOrder: Array<{ key: keyof ResumeSections; title: string }> = [
-  { key: 'professionalSummary', title: 'Professional Summary' },
-  { key: 'education', title: 'Education' },
-  { key: 'technicalSkills', title: 'Technical Skills' },
-  { key: 'workExperience', title: 'Work Experience' },
-  { key: 'projects', title: 'Projects' },
-  { key: 'languages', title: 'Languages' },
-]
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function extractSectionContent(latex: string, title: string, nextTitles: string[]): string {
-  const boundary =
-    nextTitles.length > 0
-      ? `(?=\\\\section\\*\\{(?:${nextTitles.map(escapeRegex).join('|')})\\}|\\\\end\\{document\\})`
-      : `(?=\\\\end\\{document\\})`
-  const pattern = new RegExp(`\\\\section\\*\\{${escapeRegex(title)}\\}([\\s\\S]*?)${boundary}`)
-
-  const match = latex.match(pattern)
-  return match?.[1]?.trim() || ''
-}
-
-function parseResumeSections(latex: string): ResumeSections {
-  const sections = {} as ResumeSections
-
-  sectionOrder.forEach((section, index) => {
-    const nextTitles = sectionOrder.slice(index + 1).map((item) => item.title)
-    sections[section.key] = extractSectionContent(latex, section.title, nextTitles)
-  })
-
-  return sections
-}
-
-function replaceSectionContent(latex: string, title: string, newContent: string, nextTitles: string[]): string {
-  const boundary =
-    nextTitles.length > 0
-      ? `(?=\\\\section\\*\\{(?:${nextTitles.map(escapeRegex).join('|')})\\}|\\\\end\\{document\\})`
-      : `(?=\\\\end\\{document\\})`
-  const pattern = new RegExp(`(\\\\section\\*\\{${escapeRegex(title)}\\})([\\s\\S]*?)${boundary}`)
-
-  const normalizedContent = newContent.trim()
-  return latex.replace(pattern, (_, header: string) => {
-    return `${header}\n${normalizedContent ? `${normalizedContent}\n\n` : '\n'}`
-  })
-}
-
-function rebuildLatexFromSections(latex: string, sections: ResumeSections): string {
-  return sectionOrder.reduce((currentLatex, section, index) => {
-    const nextTitles = sectionOrder.slice(index + 1).map((item) => item.title)
-    return replaceSectionContent(currentLatex, section.title, sections[section.key], nextTitles)
-  }, latex)
-}
 
 export default function TailoredResumePrep({
   resumeText,
@@ -98,19 +42,18 @@ export default function TailoredResumePrep({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState(false)
   const [activePanel, setActivePanel] = useState<EditorPanel>('sections')
   const [editableLatex, setEditableLatex] = useState('')
   const [compiledLatex, setCompiledLatex] = useState('')
-  const [sections, setSections] = useState<ResumeSections>({
-    professionalSummary: '',
-    education: '',
-    technicalSkills: '',
-    workExperience: '',
-    projects: '',
-    languages: '',
-  })
+  const [sections, setSections] = useState<ResumeSections>(EMPTY_SECTIONS)
+  const [sectionsUnparseable, setSectionsUnparseable] = useState(false)
+
+  // Prevents stale async results from overwriting a newer generation
+  const generationIdRef = useRef(0)
 
   const generateResume = async () => {
+    const myId = ++generationIdRef.current
     try {
       setIsLoading(true)
       setError(null)
@@ -119,18 +62,25 @@ export default function TailoredResumePrep({
       setCompiledLatex('')
 
       const generatedResume = await generateTailoredResumeLatex(resumeText, jobDescription)
+      if (myId !== generationIdRef.current) return
+
+      const parsedSections = parseResumeSections(generatedResume.latex)
       setTailoredResume(generatedResume)
       setEditableLatex(generatedResume.latex)
       setCompiledLatex(generatedResume.latex)
-      setSections(parseResumeSections(generatedResume.latex))
+      setSections(parsedSections)
+      setSectionsUnparseable(allSectionsEmpty(parsedSections))
     } catch (generationError) {
+      if (myId !== generationIdRef.current) return
       setError(
         generationError instanceof Error
           ? generationError.message
           : 'Failed to generate tailored LaTeX resume'
       )
     } finally {
-      setIsLoading(false)
+      if (myId === generationIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -157,10 +107,12 @@ export default function TailoredResumePrep({
             parsed.tailoredResume &&
             typeof parsed.editableLatex === 'string'
           ) {
+            const restoredSections = parsed.sections || parseResumeSections(parsed.editableLatex)
             setTailoredResume(parsed.tailoredResume)
             setEditableLatex(parsed.editableLatex)
             setCompiledLatex(parsed.compiledLatex || parsed.editableLatex)
-            setSections(parsed.sections || parseResumeSections(parsed.editableLatex))
+            setSections(restoredSections)
+            setSectionsUnparseable(allSectionsEmpty(restoredSections))
             setActivePanel(parsed.activePanel || 'sections')
             setIsLoading(false)
             return
@@ -182,10 +134,12 @@ export default function TailoredResumePrep({
           return
         }
 
+        const parsedSections = parseResumeSections(generatedResume.latex)
         setTailoredResume(generatedResume)
         setEditableLatex(generatedResume.latex)
         setCompiledLatex(generatedResume.latex)
-        setSections(parseResumeSections(generatedResume.latex))
+        setSections(parsedSections)
+        setSectionsUnparseable(allSectionsEmpty(parsedSections))
       } catch (generationError) {
         if (cancelled) {
           return
@@ -263,9 +217,12 @@ export default function TailoredResumePrep({
     try {
       await navigator.clipboard.writeText(editableLatex)
       setCopied(true)
+      setCopyError(false)
       setTimeout(() => setCopied(false), 1500)
-    } catch (copyError) {
-      console.error('Failed to copy LaTeX resume:', copyError)
+    } catch (err) {
+      console.error('Failed to copy LaTeX resume:', err)
+      setCopyError(true)
+      setTimeout(() => setCopyError(false), 2500)
     }
   }
 
@@ -450,8 +407,8 @@ export default function TailoredResumePrep({
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Section editor</p>
                 <div className="flex gap-2 flex-wrap">
                   <button type="button" onClick={handleCopy} className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs">
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? 'Copied' : 'Copy .tex'}
+                    {copied ? <Check className="w-4 h-4" /> : copyError ? <AlertCircle className="w-4 h-4 text-red-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copied' : copyError ? 'Copy failed' : 'Copy .tex'}
                   </button>
                   <button type="button" onClick={handleDownload} className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs">
                     <Download className="w-4 h-4" />
@@ -464,8 +421,19 @@ export default function TailoredResumePrep({
                 </div>
               </div>
 
+              {sectionsUnparseable && (
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-900/40 p-3 bg-yellow-50 dark:bg-yellow-900/10">
+                  <div className="flex gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-yellow-800 dark:text-yellow-300">
+                      Section headings could not be parsed from the generated LaTeX — the sections editor will be empty. Use the LaTeX tab to edit directly, or click Regenerate.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3">
-                {sectionOrder.map((section) => (
+                {SECTION_ORDER.map((section) => (
                   <div
                     key={section.key}
                     className="rounded-lg border border-gray-200 dark:border-dark-border p-3 bg-white dark:bg-dark-card"
@@ -474,7 +442,7 @@ export default function TailoredResumePrep({
                       {section.title}
                     </label>
                     <textarea
-                      value={sections[section.key]}
+                      value={sections[section.key as keyof ResumeSections]}
                       onChange={(event) => handleSectionChange(section.key, event.target.value)}
                       spellCheck={false}
                       className="input-field min-h-28 resize-y font-mono text-xs leading-relaxed"
@@ -493,8 +461,8 @@ export default function TailoredResumePrep({
                 <p className="text-sm font-medium text-gray-900 dark:text-white">LaTeX editor</p>
                 <div className="flex gap-2 flex-wrap">
                   <button type="button" onClick={handleCopy} className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs">
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? 'Copied' : 'Copy .tex'}
+                    {copied ? <Check className="w-4 h-4" /> : copyError ? <AlertCircle className="w-4 h-4 text-red-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copied' : copyError ? 'Copy failed' : 'Copy .tex'}
                   </button>
                   <button type="button" onClick={handleDownload} className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs">
                     <Download className="w-4 h-4" />
