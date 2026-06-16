@@ -2,6 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import atsResumeTemplate from '../../template_ATS_resume.tex?raw'
+import { extractLatexFromResponse } from '../lib/latexParser'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -649,17 +650,17 @@ ${resumeText}`
   try {
     const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], false)
 
-    const summaryMatch = response.match(/<summary>([\s\S]*?)<\/summary>/)
-    const warningsMatch = response.match(/<warnings>([\s\S]*?)<\/warnings>/)
-    const latexMatch = response.match(/<latex>\s*([\s\S]*?)\s*<\/latex>/)
+    const latex = extractLatexFromResponse(response)
+    if (!latex) {
+      throw new Error(
+        'The AI did not return a valid LaTeX document. Please try regenerating — the model occasionally skips the required format.'
+      )
+    }
 
-    const latex = latexMatch?.[1]?.trim() ?? ''
+    const summaryMatch = response.match(/<summary>([\s\S]*?)<\/summary>/i)
+    const warningsMatch = response.match(/<warnings>([\s\S]*?)<\/warnings>/i)
     const summaryRaw = summaryMatch?.[1]?.trim() ?? ''
     const warningsRaw = warningsMatch?.[1]?.trim() ?? '[]'
-
-    if (!latex || !latex.includes('\\documentclass')) {
-      throw new Error('No valid LaTeX document found in response')
-    }
 
     let warnings: string[] = []
     try {
