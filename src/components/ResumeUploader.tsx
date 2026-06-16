@@ -14,7 +14,15 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
   const handleFile = async (file: File) => {
     setError(null)
 
-    if (!file.type.includes('pdf') && !file.type.includes('document') && !file.type.includes('word')) {
+    const name = file.name.toLowerCase()
+    const isValidType =
+      file.type.includes('pdf') ||
+      file.type.includes('document') ||
+      file.type.includes('word') ||
+      name.endsWith('.pdf') ||
+      name.endsWith('.docx') ||
+      name.endsWith('.doc')
+    if (!isValidType) {
       setError('Please upload a PDF or Word document (.pdf, .docx, .doc)')
       return
     }

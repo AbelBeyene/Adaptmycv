@@ -156,21 +156,32 @@ function App() {
       return
     }
 
+    const controller = new AbortController()
+
     const loadMatchingJobs = async () => {
       try {
         setIsLoadingJobs(true)
         setJobsError(null)
-        const jobs = await fetchMatchingJobs(resumeText, jobsFilters)
-        setMatchedJobs(jobs)
+        const jobs = await fetchMatchingJobs(resumeText, jobsFilters, controller.signal)
+        if (!controller.signal.aborted) {
+          setMatchedJobs(jobs)
+        }
       } catch (error) {
+        if (controller.signal.aborted) return
         setJobsError(error instanceof Error ? error.message : 'Failed to load matching jobs')
         setMatchedJobs([])
       } finally {
-        setIsLoadingJobs(false)
+        if (!controller.signal.aborted) {
+          setIsLoadingJobs(false)
+        }
       }
     }
 
     loadMatchingJobs()
+
+    return () => {
+      controller.abort()
+    }
   }, [resumeText, jobsFilters])
 
   const handleResumeUpload = async (file: File) => {

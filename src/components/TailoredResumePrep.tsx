@@ -282,7 +282,7 @@ export default function TailoredResumePrep({
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    URL.revokeObjectURL(objectUrl)
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000)
   }
 
   const handleSectionChange = (key: keyof ResumeSections, value: string) => {

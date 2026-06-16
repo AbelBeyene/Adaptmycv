@@ -62,6 +62,22 @@ function getFriendlyOpenRouterErrorMessage(message: string): string {
     return 'The AI provider rejected this request format. Please try again in a moment.'
   }
 
+  if (message.includes('API error: 401')) {
+    return 'Invalid API key. Please check your OpenRouter API credentials.'
+  }
+
+  if (message.includes('API error: 5')) {
+    return 'The AI provider is experiencing issues. Please try again in a moment.'
+  }
+
+  if (message.toLowerCase().includes('timeout') || message.toLowerCase().includes('timed out') || message.includes('AbortError')) {
+    return 'The request timed out. Please check your connection and try again.'
+  }
+
+  if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror')) {
+    return 'Network error — please check your internet connection and try again.'
+  }
+
   return `API call failed: ${message}`
 }
 
@@ -128,6 +144,7 @@ async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = fa
           messages,
           ...(requireJson ? { response_format: { type: 'json_object' } } : {}),
         }),
+        signal: AbortSignal.timeout(60_000),
       })
 
       if (!response.ok) {
@@ -169,6 +186,9 @@ async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = fa
     throw new Error('API error: 429 Too Many Requests')
   } catch (error) {
     console.error('OpenRouter API error:', error)
+    if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      throw new Error('The request timed out. Please check your connection and try again.')
+    }
     if (error instanceof Error) {
       throw new Error(getFriendlyOpenRouterErrorMessage(error.message))
     }
@@ -347,13 +367,14 @@ export async function extractJobDescriptionFromUrl(jobUrl: string): Promise<stri
     }
 
     const normalizedUrl = /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`
-    const readableProxyUrl = `https://r.jina.ai/http://${normalizedUrl.replace(/^https?:\/\//i, '')}`
+    const readableProxyUrl = `https://r.jina.ai/${normalizedUrl}`
 
     const response = await fetch(readableProxyUrl, {
       method: 'GET',
       headers: {
         Accept: 'text/plain',
       },
+      signal: AbortSignal.timeout(30_000),
     })
 
     if (!response.ok) {
@@ -444,7 +465,10 @@ Requirements:
       throw new Error('Invalid response structure from API')
     }
 
-    return analysis
+    return {
+      ...analysis,
+      matchScore: Math.min(100, Math.max(0, Math.round(analysis.matchScore))),
+    }
   } catch (error) {
     console.error('Analysis error:', error)
     throw error

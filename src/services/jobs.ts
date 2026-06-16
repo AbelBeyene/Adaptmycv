@@ -118,7 +118,7 @@ function computeMatchScore(resumeText: string, title: string, description?: stri
   return Math.max(60, Math.min(98, base + bonus))
 }
 
-export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters): Promise<MatchingJob[]> {
+export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters, signal?: AbortSignal): Promise<MatchingJob[]> {
   if (!RAPID_API_KEY) {
     throw new Error('Missing VITE_RAPIDAPI_KEY. Add it to your .env.local file.')
   }
@@ -163,6 +163,7 @@ export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters
       'x-rapidapi-host': RAPID_API_HOST,
       'x-rapidapi-key': RAPID_API_KEY,
     },
+    signal: signal ?? AbortSignal.timeout(20_000),
   })
 
   if (!response.ok) {
