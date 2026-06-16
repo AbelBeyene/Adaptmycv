@@ -1,15 +1,50 @@
-import { useState, useRef } from 'react'
-import { Upload, FileText, AlertCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Upload, FileText, AlertCircle, Clock, RefreshCw } from 'lucide-react'
+
+interface SavedResume {
+  text: string
+  fileName: string
+  savedAt: number
+}
 
 interface ResumeUploaderProps {
   onUpload: (file: File) => Promise<void>
+  onResumeCached: (text: string) => void
+  resumeStoreKey: string
 }
 
-export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
+function timeAgo(ms: number): string {
+  const diff = Date.now() - ms
+  const minutes = Math.floor(diff / 60_000)
+  const hours = Math.floor(diff / 3_600_000)
+  const days = Math.floor(diff / 86_400_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  return `${days}d ago`
+}
+
+export default function ResumeUploader({ onUpload, onResumeCached, resumeStoreKey }: ResumeUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [savedResume, setSavedResume] = useState<SavedResume | null>(null)
+  const [showUpload, setShowUpload] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(resumeStoreKey)
+      if (raw) {
+        const parsed = JSON.parse(raw) as SavedResume
+        if (parsed.text && parsed.fileName) {
+          setSavedResume(parsed)
+        }
+      }
+    } catch {
+      // corrupted cache — ignore
+    }
+  }, [resumeStoreKey])
 
   const handleFile = async (file: File) => {
     setError(null)
@@ -47,9 +82,7 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
     setIsDragging(true)
   }
 
-  const handleDragLeave = () => {
-    setIsDragging(false)
-  }
+  const handleDragLeave = () => setIsDragging(false)
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -63,12 +96,68 @@ export default function ResumeUploader({ onUpload }: ResumeUploaderProps) {
     if (file) handleFile(file)
   }
 
+  // Show cached resume choice screen
+  if (savedResume && !showUpload) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="section-title mb-2">Welcome Back</h2>
+          <p className="section-subtitle">We found your previously uploaded resume</p>
+        </div>
+
+        <div className="card border-2 border-gray-200 dark:border-dark-border space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900 dark:text-white truncate">{savedResume.fileName}</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <Clock className="w-3 h-3 text-gray-400 dark:text-dark-text-secondary" />
+                <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
+                  Saved {timeAgo(savedResume.savedAt)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => onResumeCached(savedResume.text)}
+              className="btn-primary flex-1 flex items-center justify-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Continue with this resume
+            </button>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="btn-secondary flex-1 flex items-center justify-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Upload new
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Normal upload screen
   return (
     <div className="space-y-6">
       <div>
         <h2 className="section-title mb-2">Upload Your Resume</h2>
         <p className="section-subtitle">Upload your current CV to get started with optimization</p>
       </div>
+
+      {savedResume && showUpload && (
+        <button
+          onClick={() => setShowUpload(false)}
+          className="text-sm text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-white flex items-center gap-1 transition-colors"
+        >
+          ← Back to previous resume
+        </button>
+      )}
 
       <div
         onDragOver={handleDragOver}

@@ -184,9 +184,22 @@ function App() {
     }
   }, [resumeText, jobsFilters])
 
+  const RESUME_STORE_KEY = 'adaptmycv-saved-resume-v1'
+
   const handleResumeUpload = async (file: File) => {
     setResumeFile(file)
     const text = await extractResumeText(file)
+    setResumeText(text)
+    try {
+      window.localStorage.setItem(
+        RESUME_STORE_KEY,
+        JSON.stringify({ text, fileName: file.name, savedAt: Date.now() })
+      )
+    } catch { /* storage full — non-critical */ }
+    setCurrentStep('job')
+  }
+
+  const handleResumeCached = (text: string) => {
     setResumeText(text)
     setCurrentStep('job')
   }
@@ -323,7 +336,13 @@ function App() {
               </div>
 
               <div className="slide-in">
-                {currentStep === 'upload' && <ResumUploader onUpload={handleResumeUpload} />}
+                {currentStep === 'upload' && (
+                    <ResumUploader
+                      onUpload={handleResumeUpload}
+                      onResumeCached={handleResumeCached}
+                      resumeStoreKey={RESUME_STORE_KEY}
+                    />
+                  )}
 
                 {currentStep === 'job' && (
                   <JobDescriptionInput
