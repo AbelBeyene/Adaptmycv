@@ -27,8 +27,18 @@ type OpenRouterMessage = {
   content: string
 }
 
-const OPENROUTER_MAX_RETRIES = 2
-const OPENROUTER_BASE_RETRY_DELAY_MS = 1500
+const OPENROUTER_MAX_RETRIES = 5
+const OPENROUTER_BASE_RETRY_DELAY_MS = 3000
+
+// Groq free tier: 12,000 TPM. Each call uses ~4,000–8,000 tokens.
+// Cap inputs to stay under the limit across sequential calls.
+const MAX_RESUME_CHARS = 3000
+const MAX_JOB_DESC_CHARS = 3000
+
+function truncate(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  return text.slice(0, maxChars) + '\n[...truncated for token limit]'
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -157,9 +167,17 @@ async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = fa
         console.error('API Response Error:', errorText)
 
         if (response.status === 429 && attempt < OPENROUTER_MAX_RETRIES) {
-          const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'))
-          const backoffMs = retryAfterMs ?? OPENROUTER_BASE_RETRY_DELAY_MS * (attempt + 1)
-          console.warn(`OpenRouter rate limited request. Retrying in ${backoffMs}ms...`)
+          // Prefer Retry-After header, then parse Groq's "try again in Xs" message
+          let backoffMs = parseRetryAfterMs(response.headers.get('retry-after'))
+          if (!backoffMs) {
+            try {
+              const body = JSON.parse(errorText)
+              const match = (body?.error?.message as string | undefined)?.match(/try again in (\d+\.?\d*)s/i)
+              if (match) backoffMs = Math.ceil(parseFloat(match[1]) * 1000) + 500
+            } catch { /* ignore */ }
+          }
+          backoffMs ??= OPENROUTER_BASE_RETRY_DELAY_MS * (attempt + 1)
+          console.warn(`Rate limited. Retrying in ${backoffMs}ms... (attempt ${attempt + 1}/${OPENROUTER_MAX_RETRIES})`)
           await wait(backoffMs)
           continue
         }
@@ -399,7 +417,7 @@ export async function extractJobDescriptionFromUrl(jobUrl: string): Promise<stri
       throw new Error('Fetched content is too short. Please paste the job description manually.')
     }
 
-    return cleanedText.slice(0, 12000)
+    return cleanedText.slice(0, MAX_JOB_DESC_CHARS)
   } catch (error) {
     console.error('Job URL extraction error:', error)
     throw new Error(
@@ -412,18 +430,16 @@ export async function analyzeResumeJobMatch(
   resumeText: string,
   jobDescription: string
 ): Promise<AnalysisData> {
-  console.log('analyzeResumeJobMatch called with:', {
-    resumeTextLength: resumeText.length,
-    jobDescriptionLength: jobDescription.length
-  })
-  
+  const resume = truncate(resumeText, MAX_RESUME_CHARS)
+  const jobDesc = truncate(jobDescription, MAX_JOB_DESC_CHARS)
+
   const analysisPrompt = `You are an expert resume optimizer and recruiter. Analyze the following resume against the job description and provide detailed analysis in JSON format.
 
 RESUME:
-${resumeText}
+${resume}
 
 JOB DESCRIPTION:
-${jobDescription}
+${jobDesc}
 
 Provide your response as a JSON object with exactly this structure (no markdown, just JSON):
 {
@@ -485,13 +501,15 @@ export async function generateCustomRecommendations(
   jobDescription: string,
   currentRecommendations: string[]
 ): Promise<string[]> {
+  const resume = truncate(resumeText, MAX_RESUME_CHARS)
+  const jobDesc = truncate(jobDescription, MAX_JOB_DESC_CHARS)
   const prompt = `Based on this resume and job description, provide 3 additional specific recommendations to improve the match:
 
 RESUME:
-${resumeText}
+${resume}
 
 JOB DESCRIPTION:
-${jobDescription}
+${jobDesc}
 
 Current recommendations:
 ${currentRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
@@ -530,6 +548,8 @@ export async function generateCoverLetter(
   resumeText: string,
   jobDescription: string
 ): Promise<CoverLetterVariants> {
+  const resume = truncate(resumeText, MAX_RESUME_CHARS)
+  const jobDesc = truncate(jobDescription, MAX_JOB_DESC_CHARS)
   const prompt = `You are a professional career coach and hiring expert.
 
 Write four tailored cover letter versions based on the resume and job description below.
@@ -570,10 +590,10 @@ Return exactly this JSON structure:
 }
 
 JOB DESCRIPTION:
-${jobDescription}
+${jobDesc}
 
 RESUME:
-${resumeText}`
+${resume}`
 
   try {
     const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], true)
@@ -611,6 +631,8 @@ export async function generateTailoredResumeLatex(
   resumeText: string,
   jobDescription: string
 ): Promise<TailoredResumeLatex> {
+  const resume = truncate(resumeText, MAX_RESUME_CHARS)
+  const jobDesc = truncate(jobDescription, MAX_JOB_DESC_CHARS)
   const prompt = `You are an expert resume writer, ATS optimizer, and LaTeX formatter.
 
 Create a professional ATS-friendly resume in LaTeX based ONLY on the candidate information found in the resume below, tailored to the target job description.
@@ -643,13 +665,13 @@ IMPORTANT: Respond using ONLY this exact format with these XML tags — no other
 </latex>
 
 JOB DESCRIPTION:
-${jobDescription}
+${jobDesc}
 
 LATEX TEMPLATE TO FOLLOW:
 ${atsResumeTemplate}
 
 SOURCE RESUME:
-${resumeText}`
+${resume}`
 
   try {
     const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], false)

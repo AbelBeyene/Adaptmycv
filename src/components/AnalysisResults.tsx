@@ -87,6 +87,8 @@ export default function AnalysisResults({
         )
 
         try {
+          // Wait before the next call so the token bucket has time to refill
+          await new Promise((r) => setTimeout(r, 4000))
           const letter = await generateCoverLetter(resumeText, jobDescription)
           setCoverLetter(letter)
         } catch (letterError) {
