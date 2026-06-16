@@ -1,33 +1,40 @@
 # AdaptMyCV
 
-Tailor your resume instantly for any job opportunity. AdaptMyCV uses **Google's Gemini AI** to analyze your resume against job descriptions and provides actionable recommendations to improve your chances of landing interviews.
+Tailor your resume instantly for any job opportunity. AdaptMyCV analyzes your resume against job descriptions, generates tailored cover letters, builds ATS-optimized LaTeX resumes, and surfaces matching job listings — all in one flow.
 
 ## Features
 
-- **Resume Upload** - Support for PDF and Word documents
-- **Job Description Analysis** - Paste any job posting for automated analysis
-- **AI-Powered Matching** - Uses Gemini Flash API for intelligent resume-to-job matching
-- **Match Scoring** - Get a percentage match score showing how well your resume aligns
-- **Skill Matching** - See which hard skills, soft skills match and which ones are missing
-- **Smart Recommendations** - Get actionable tips to improve your resume for the specific job
-- **Dark/Light Theme** - Better-auth inspired minimal design with full theme support
-- **ATS Optimization** - Ensure your resume works with Applicant Tracking Systems
+- **Resume Upload** — PDF and DOCX/DOC support with drag-and-drop
+- **Job URL or Paste** — Fetch a job description directly from a URL or paste it manually
+- **AI Match Analysis** — Match score, hard skills, soft skills, and missing skills breakdown
+- **Cover Letter Generator** — Four writing styles: Direct, Traditional, Natural, and Personal
+- **Resume Studio** — ATS-optimized LaTeX resume tailored to the role, with a live PDF preview and an in-browser section editor
+- **Matching Jobs Sidebar** — Fetches real job listings based on your resume and applies country, date, employment type, and remote filters
+- **Session Persistence** — All state (resume text, analysis, studio edits) survives a page refresh via localStorage
+- **Dark/Light Theme** — Full theme support with a minimal, clean UI
 
 ## Tech Stack
 
-- **Frontend**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS (with better-auth inspired theme)
-- **Icons**: Lucide React
-- **AI**: Google Gemini Flash API
-- **Utilities**: clsx, class-variance-authority, tailwind-merge
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + TypeScript |
+| Build | Vite |
+| Styling | Tailwind CSS |
+| Icons | Lucide React |
+| AI | OpenRouter (default: `google/gemini-2.0-flash-001`) |
+| PDF parsing | pdfjs-dist |
+| DOCX parsing | mammoth |
+| Job listings | JSearch via RapidAPI |
+| LaTeX compile | latexonline.cc |
+| Tests | Vitest + jsdom + Testing Library |
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 24+
-- Google Gemini API Key
+- Node.js 18+
+- An [OpenRouter](https://openrouter.ai) API key
+- (Optional) A [RapidAPI](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) key for the job-matching sidebar
 
 ### Installation
 
@@ -37,14 +44,16 @@ npm install
 
 ### Environment Setup
 
-Create a `.env.local` file in the project root with your Gemini API credentials:
+Create a `.env.local` file in the project root:
 
 ```env
-VITE_GEMINI_API_KEY=your_api_key_here
-VITE_GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent
+VITE_OPENROUTER_API_KEY=your_openrouter_key_here
+VITE_OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
+VITE_OPENROUTER_MODEL=google/gemini-2.0-flash-001   # optional, this is the default
+VITE_RAPIDAPI_KEY=your_rapidapi_key_here             # optional, enables job sidebar
 ```
 
-Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+The app runs without `VITE_RAPIDAPI_KEY` — the job sidebar simply won't appear.
 
 ### Development
 
@@ -52,7 +61,7 @@ Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 npm run dev
 ```
 
-The application will open at `http://localhost:5173`
+Opens at `http://localhost:5173`.
 
 ### Build
 
@@ -60,76 +69,83 @@ The application will open at `http://localhost:5173`
 npm run build
 ```
 
-### Preview
+### Tests
 
 ```bash
-npm run preview
+npm test           # run once
+npm run test:watch # watch mode
+npm run test:ui    # Vitest UI
 ```
+
+39 unit tests covering section parsing, LaTeX extraction, and edge cases.
 
 ## Project Structure
 
 ```
 src/
 ├── components/
-│   ├── ResumeUploader.tsx      # Resume upload component with drag-drop
-│   ├── JobDescriptionInput.tsx # Job description input with examples
-│   └── AnalysisResults.tsx     # Results and AI-powered recommendations
+│   ├── ResumeUploader.tsx       # drag-drop upload with MIME + extension validation
+│   ├── JobDescriptionInput.tsx  # paste or fetch from URL via Jina reader proxy
+│   ├── AnalysisResults.tsx      # match score, skills, cover letters
+│   └── TailoredResumePrep.tsx  # Resume Studio (LaTeX editor + live PDF preview)
 ├── services/
-│   └── gemini.ts              # Gemini API integration
-├── App.tsx                      # Main App component
-├── main.tsx                     # Entry point
-└── index.css                    # Global styles with Tailwind
+│   ├── openrouter.ts            # AI API calls, PDF/DOCX extraction, retry logic
+│   └── jobs.ts                  # JSearch job listing API
+├── lib/
+│   ├── resumeSections.ts        # section parse/replace/rebuild utilities
+│   ├── latexParser.ts           # extractLatexFromResponse (fence-stripping, fallback)
+│   └── __tests__/               # unit tests
+├── test/
+│   └── setup.ts                 # jest-dom setup for Vitest
+├── App.tsx                      # app shell, routing between steps, sidebar
+└── main.tsx                     # entry point
 ```
 
-## API Integration
+## User Flow
 
-The app uses Google's Gemini Flash API for resume analysis. The `services/gemini.ts` module handles:
-
-1. **Resume Text Extraction** - Processes uploaded PDF/DOCX files
-2. **Job Matching Analysis** - Compares resume content with job description
-3. **Skill Gap Analysis** - Identifies matching and missing skills
-4. **Recommendations** - Generates personalized improvement suggestions
-
-### API Response Format
-
-```json
-{
-  "matchScore": 72,
-  "hardSkillsMatch": ["React", "TypeScript", "Node.js"],
-  "softSkillsMatch": ["Problem Solving", "Team Collaboration"],
-  "missingSkills": ["Kubernetes", "AWS API Gateway"],
-  "recommendations": [
-    "Highlight Docker experience more prominently",
-    "Add AWS projects to experience section"
-  ]
-}
+```
+Upload Resume → Enter Job Description → Analysis Results → (optional) Resume Studio
+                                                    ↓
+                                          Cover Letters (4 styles)
+                                          Job Matching Sidebar
 ```
 
-## Styling
+## Environment Variables
 
-The project uses Tailwind CSS with a minimalist design 
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_OPENROUTER_API_KEY` | Yes | OpenRouter API key |
+| `VITE_OPENROUTER_API_URL` | Yes | OpenRouter endpoint |
+| `VITE_OPENROUTER_MODEL` | No | Model ID (default: `google/gemini-2.0-flash-001`) |
+| `VITE_RAPIDAPI_KEY` | No | RapidAPI key for JSearch job listings |
 
-- Clean, modern UI with smooth transitions
-- Dark and light theme support
-- Custom color palette optimized for both themes
-- Component-level styling utilities in `src/index.css`
+## Resilience & Error Handling
 
-## Environmental Variables
+- **Request timeouts**: 60 s for AI calls, 30 s for URL fetches, 20 s for job listings
+- **Rate-limit retry**: exponential backoff with `Retry-After` header support for 429s
+- **LaTeX format fallback**: handles raw LaTeX output, markdown-fenced output, and missing XML tags from the AI
+- **Section parsing**: matches both `\section*{...}` and `\section{...}` (AI output varies)
+- **Concurrent generation protection**: rapid Regenerate clicks can't cause stale results to overwrite newer ones
+- **DOCX validation**: checks both MIME type and file extension (some browsers report `.docx` as `application/zip`)
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_GEMINI_API_KEY` | Google Gemini API key |
-| `VITE_GEMINI_API_URL` | Gemini API endpoint URL |
+## Troubleshooting
 
-## Features Coming Soon
+**API key not working**
+- Confirm `VITE_OPENROUTER_API_KEY` is set in `.env.local` (not `.env`)
+- Restart the dev server after editing `.env.local`
 
-- 📄 **PDF Parsing** - Full resume content extraction using pdf-parse
-- 📝 **Resume Rewriting** - AI-powered suggestions for resume sentences
-- 📧 **Cover Letter Optimization** - Analyze and optimize cover letters
-- 🌍 **Multi-Language Support** - Support for multiple languages
-- 💾 **Job History** - Save and compare analyzed jobs
-- 📊 **Analytics Dashboard** - Track your resume optimization progress
-- 🔗 **Job Board Integration** - Direct integration with job websites
+**Resume Studio shows empty sections**
+- The AI occasionally outputs `\section{...}` without the asterisk — the parser handles both; if sections are still empty a yellow warning banner will appear with instructions
+- Click **Regenerate** to get a fresh attempt
+
+**PDF preview blank or error**
+- The preview compiles via latexonline.cc; a LaTeX syntax error in the generated document will show an error page in the iframe — use the **Download .tex** button and compile locally with `xelatex` for full diagnostics
+
+**Job sidebar missing**
+- Add `VITE_RAPIDAPI_KEY` to `.env.local` and restart
+
+**File rejected on upload**
+- Supported formats: PDF, DOCX, DOC (max 10 MB)
 
 ## License
 
@@ -137,25 +153,4 @@ MIT
 
 ---
 
-Built with ❤️ to help you land your next opportunity.
-
-## Troubleshooting
-
-### API Key Issues
-- Verify your API key is correctly set in `.env.local`
-- Ensure the API key has the necessary permissions in Google Cloud Console
-- Check that quotas and billing are enabled for your project
-
-### Analysis Errors
-- Ensure job description is at least 50 characters
-- Resume file should be less than 10MB
-- Supported formats: PDF, DOCX, DOC
-
-### Performance
-- The first analysis may take 2-3 seconds as Gemini processes the request
-- Subsequent analyses are generally faster due to caching
-
-## Support
-
-For issues or feature requests, please open an issue in the repository.
-abelbeyene.dev
+Built by [Abel Beyene](https://abelbeyene.dev)
