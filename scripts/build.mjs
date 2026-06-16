@@ -43,4 +43,4 @@ if (vercelPassed) {
 }
 
 console.log('Running build...')
-run('tsc -b && vite build', { stdio: 'inherit' })
+execSync('tsc -b && vite build', { stdio: 'inherit' })
