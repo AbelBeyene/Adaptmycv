@@ -6,12 +6,18 @@ import { extractLatexFromResponse } from '../lib/latexParser'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
-const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const API_KEYS: string[] = [
+  import.meta.env.VITE_OPENROUTER_API_KEY,
+  import.meta.env.VITE_OPENROUTER_API_KEY_2,
+].filter(Boolean)
+
 const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
 const MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash'
 
-if (!API_KEY || !API_URL) {
-  console.error('Missing OpenRouter API credentials. Check your .env.local file.')
+if (API_KEYS.length === 0 || !API_URL) {
+  console.error('Missing API credentials. Check your .env.local file.')
+} else {
+  console.log(`API ready: ${API_KEYS.length} key(s) available.`)
 }
 
 export interface AnalysisData {
@@ -140,17 +146,22 @@ function extractTextFromContent(content: unknown): string {
 
 async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = false): Promise<string> {
   try {
-    if (!API_KEY || !API_URL) {
-      throw new Error('OpenRouter API credentials not configured')
+    if (API_KEYS.length === 0 || !API_URL) {
+      throw new Error('API credentials not configured')
     }
 
-    console.log('Calling OpenRouter API...', { model: MODEL, url: API_URL })
+    // Each attempt can use a different key — round-robin on rate limit
+    let keyIndex = 0
+    console.log(`Calling API... model=${MODEL} keys=${API_KEYS.length}`)
+
     for (let attempt = 0; attempt <= OPENROUTER_MAX_RETRIES; attempt += 1) {
+      const apiKey = API_KEYS[keyIndex % API_KEYS.length]
+
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           'HTTP-Referer': window.location.origin,
           'X-Title': 'AdaptMyCV',
         },
@@ -167,6 +178,13 @@ async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = fa
         console.error('API Response Error:', errorText)
 
         if (response.status === 429 && attempt < OPENROUTER_MAX_RETRIES) {
+          // Rotate to the next key immediately before waiting
+          keyIndex += 1
+          const usingFallback = API_KEYS.length > 1 && keyIndex % API_KEYS.length !== 0
+          if (usingFallback) {
+            console.warn(`Rate limited on key ${keyIndex}. Switching to key ${(keyIndex % API_KEYS.length) + 1}...`)
+          }
+
           // Prefer Retry-After header, then parse Groq's "try again in Xs" message
           let backoffMs = parseRetryAfterMs(response.headers.get('retry-after'))
           if (!backoffMs) {
@@ -176,8 +194,9 @@ async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = fa
               if (match) backoffMs = Math.ceil(parseFloat(match[1]) * 1000) + 500
             } catch { /* ignore */ }
           }
-          backoffMs ??= OPENROUTER_BASE_RETRY_DELAY_MS * (attempt + 1)
-          console.warn(`Rate limited. Retrying in ${backoffMs}ms... (attempt ${attempt + 1}/${OPENROUTER_MAX_RETRIES})`)
+          // If we rotated to a fresh key, no need to wait as long
+          backoffMs ??= usingFallback ? 500 : OPENROUTER_BASE_RETRY_DELAY_MS * (attempt + 1)
+          console.warn(`Retrying in ${backoffMs}ms... (attempt ${attempt + 1}/${OPENROUTER_MAX_RETRIES})`)
           await wait(backoffMs)
           continue
         }
