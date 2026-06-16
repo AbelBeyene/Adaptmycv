@@ -21,7 +21,7 @@ Tailor your resume instantly for any job opportunity. AdaptMyCV analyzes your re
 | Build | Vite |
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
-| AI | OpenRouter (default: `google/gemini-2.0-flash-001`) |
+| AI | OpenRouter (default: `google/gemini-2.0-flash`) |
 | PDF parsing | pdfjs-dist |
 | DOCX parsing | mammoth |
 | Job listings | JSearch via RapidAPI |
@@ -49,7 +49,7 @@ Create a `.env.local` file in the project root:
 ```env
 VITE_OPENROUTER_API_KEY=your_openrouter_key_here
 VITE_OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
-VITE_OPENROUTER_MODEL=google/gemini-2.0-flash-001   # optional, this is the default
+VITE_OPENROUTER_MODEL=google/gemini-2.0-flash   # optional, this is the default
 VITE_RAPIDAPI_KEY=your_rapidapi_key_here             # optional, enables job sidebar
 ```
 
@@ -116,7 +116,7 @@ Upload Resume → Enter Job Description → Analysis Results → (optional) Resu
 |---|---|---|
 | `VITE_OPENROUTER_API_KEY` | Yes | OpenRouter API key |
 | `VITE_OPENROUTER_API_URL` | Yes | OpenRouter endpoint |
-| `VITE_OPENROUTER_MODEL` | No | Model ID (default: `google/gemini-2.0-flash-001`) |
+| `VITE_OPENROUTER_MODEL` | No | Model ID (default: `google/gemini-2.0-flash`) |
 | `VITE_RAPIDAPI_KEY` | No | RapidAPI key for JSearch job listings |
 
 ## Resilience & Error Handling

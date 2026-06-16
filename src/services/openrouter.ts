@@ -8,7 +8,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
 const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
-const MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001'
+const MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash'
 
 if (!API_KEY || !API_URL) {
   console.error('Missing OpenRouter API credentials. Check your .env.local file.')
@@ -65,6 +65,10 @@ function getFriendlyOpenRouterErrorMessage(message: string): string {
 
   if (message.includes('API error: 401')) {
     return 'Invalid API key. Please check your OpenRouter API credentials.'
+  }
+
+  if (message.includes('API error: 404')) {
+    return 'The selected AI model is unavailable on OpenRouter. Update VITE_OPENROUTER_MODEL in your environment variables.'
   }
 
   if (message.includes('API error: 5')) {
