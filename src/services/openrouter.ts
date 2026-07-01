@@ -731,6 +731,78 @@ ${resume}`
   }
 }
 
+export interface CritiqueSection {
+  key: string
+  title: string
+  score: number
+  status: 'pass' | 'warn' | 'fail'
+  findings: string[]
+  suggestions: string[]
+}
+
+export interface ResumeCritique {
+  overallScore: number
+  sections: CritiqueSection[]
+  topRedFlags: string[]
+  quickWins: string[]
+}
+
+export async function analyzeResumeCritique(resumeText: string): Promise<ResumeCritique> {
+  const resume = truncate(resumeText, MAX_RESUME_CHARS)
+
+  const prompt = `You are a senior recruiter and resume expert. Critically evaluate this resume across 11 professional criteria. Be direct and specific — reference actual content from the resume.
+
+RESUME:
+${resume}
+
+Respond with ONLY valid JSON, no markdown, no extra text:
+
+{
+  "overallScore": <weighted average 0-100>,
+  "sections": [
+    {"key":"contact","title":"Contact & Basic Info","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[<up to 3 specific observations>],"suggestions":[<up to 3 actionable fixes>]},
+    {"key":"formatting","title":"Formatting & ATS Compatibility","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"summary","title":"Professional Summary","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"experience","title":"Work Experience","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"gaps","title":"Employment Gaps","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"keywords","title":"Keywords & Relevance","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"skills","title":"Skills Section","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"education","title":"Education & Certifications","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"redflags","title":"Red Flags","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"tailoring","title":"Tailoring & Personalization","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
+    {"key":"tone","title":"Tone & Language Quality","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]}
+  ],
+  "topRedFlags": [<up to 3 most critical issues hurting this resume>],
+  "quickWins": [<up to 3 high-impact easy improvements>]
+}
+
+Scoring: pass=7-10 (meets standard), warn=4-6 (needs work), fail=0-3 (significant problem). For employment gaps: if no gaps exist, score 10 and status pass.`
+
+  const schemaHint = `{
+  "overallScore": 0,
+  "sections": [{"key":"contact","title":"","score":0,"status":"pass","findings":[],"suggestions":[]}],
+  "topRedFlags": [],
+  "quickWins": []
+}`
+
+  const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], true)
+  const parsed = await parseJsonResponse<ResumeCritique>(response, schemaHint)
+
+  if (
+    typeof parsed.overallScore !== 'number' ||
+    !Array.isArray(parsed.sections) ||
+    !Array.isArray(parsed.topRedFlags) ||
+    !Array.isArray(parsed.quickWins)
+  ) {
+    throw new Error('Invalid critique response structure from API')
+  }
+
+  return {
+    ...parsed,
+    overallScore: Math.min(100, Math.max(0, Math.round(parsed.overallScore))),
+  }
+}
+
 export function buildLatexPdfUrl(latex: string, filename = 'adapted-harvard-resume.pdf'): string {
   const params = new URLSearchParams({
     text: latex,

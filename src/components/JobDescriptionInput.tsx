@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Link as LinkIcon, Zap } from 'lucide-react'
+import { ArrowLeft, Link as LinkIcon, Zap, MessageSquare } from 'lucide-react'
 import { extractJobDescriptionFromUrl } from '../services/openrouter'
 
 interface JobDescriptionInputProps {
   onSubmit: (text: string) => void | Promise<void>
   onBack: () => void
   initialJobLink?: string
+  onCritiqueResume?: () => void
 }
 
-export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink = '' }: JobDescriptionInputProps) {
+export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink = '', onCritiqueResume }: JobDescriptionInputProps) {
   const [jobDescription, setJobDescription] = useState('')
   const [jobLink, setJobLink] = useState(initialJobLink)
   const [isLoading, setIsLoading] = useState(false)
@@ -162,6 +163,23 @@ export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink =
             {isLoading ? 'Working...' : 'Analyze Match'}
           </button>
         </div>
+
+        {onCritiqueResume && (
+          <div className="pt-2 border-t border-gray-200 dark:border-dark-border">
+            <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-2 text-center">
+              Don't have a job description yet?
+            </p>
+            <button
+              type="button"
+              onClick={onCritiqueResume}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-gray-300 dark:border-dark-border text-sm text-gray-700 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-card transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Critique My Resume Instead
+            </button>
+          </div>
+        )}
       </form>
     </div>
   )

@@ -4,12 +4,13 @@ import ResumUploader from './components/ResumeUploader'
 import JobDescriptionInput from './components/JobDescriptionInput'
 import AnalysisResults from './components/AnalysisResults'
 import TailoredResumePrep from './components/TailoredResumePrep'
+import ResumeCritic from './components/ResumeCritic'
 import { extractResumeText } from './services/openrouter'
 import { fetchMatchingJobs, type MatchingJob, type JobsFilters } from './services/jobs'
 import './App.css'
 import type { PrioritizedRecommendation } from './components/AnalysisResults'
 
-type AppStep = 'upload' | 'job' | 'results' | 'prepare'
+type AppStep = 'upload' | 'job' | 'results' | 'prepare' | 'critic'
 const APP_CACHE_KEY = 'adaptmycv-app-state-v1'
 
 function App() {
@@ -255,7 +256,12 @@ function App() {
     window.open(job.applyLink, '_blank', 'noopener,noreferrer')
   }
 
+  const handleCritiqueResume = () => {
+    setCurrentStep('critic')
+  }
+
   const isResumeStudioPage = currentStep === 'prepare'
+  const isCriticPage = currentStep === 'critic'
   const progressStep = currentStep === 'prepare' ? 'results' : currentStep
   const currentStepIndex = progressSteps.indexOf(progressStep)
   const progressWidth = progressSteps.length > 1 ? (currentStepIndex / (progressSteps.length - 1)) * 100 : 0
