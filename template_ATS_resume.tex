@@ -24,8 +24,7 @@
 }
 
 \newcommand{\profilephoto}{%
-  \IfFileExists{profile.jpg}{\includegraphics[width=2.1cm,height=2.7cm,keepaspectratio]{profile.jpg}}{%
-  \fbox{\parbox[c][2.7cm][c]{2.1cm}{\centering \footnotesize Add\\profile.jpg}}}%
+  \IfFileExists{profile.jpg}{\includegraphics[width=2.1cm,height=2.7cm,keepaspectratio]{profile.jpg}}{}%
 }
 
 \begin{document}

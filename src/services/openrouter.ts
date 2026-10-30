@@ -43,6 +43,8 @@ const OPENROUTER_BASE_RETRY_DELAY_MS = 3000
 // Cap inputs to stay under the limit across sequential calls.
 const MAX_RESUME_CHARS = 3000
 const MAX_JOB_DESC_CHARS = 3000
+// Calls that echo the whole resume back (rewrite, critique) need all of it, or later jobs/education get dropped
+const MAX_FULL_RESUME_CHARS = 8000
 
 function truncate(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text
@@ -653,7 +655,7 @@ export async function generateTailoredResumeLatex(
   resumeText: string,
   jobDescription: string
 ): Promise<TailoredResumeLatex> {
-  const resume = truncate(resumeText, MAX_RESUME_CHARS)
+  const resume = truncate(resumeText, MAX_FULL_RESUME_CHARS)
   const jobDesc = truncate(jobDescription, MAX_JOB_DESC_CHARS)
   const prompt = `You are an expert resume writer, ATS optimizer, and LaTeX formatter.
 
@@ -736,12 +738,8 @@ ${resume}`
 
 export type { CritiqueFinding, ResumeDocSection, ResumeCritique } from '../lib/critique'
 
-// The critique echoes the whole resume back as Markdown, so it needs more of it than the
-// other calls; ~2k tokens in + ~4k out still fits one call under Groq's 12k TPM.
-const MAX_CRITIQUE_RESUME_CHARS = 8000
-
 export async function analyzeResumeCritique(resumeText: string, jobDescription = ''): Promise<ResumeCritique> {
-  const resume = truncate(resumeText, MAX_CRITIQUE_RESUME_CHARS)
+  const resume = truncate(resumeText, MAX_FULL_RESUME_CHARS)
   const job = jobDescription.trim() ? truncate(jobDescription.trim(), MAX_JOB_DESC_CHARS) : ''
 
   const prompt = `You are a senior recruiter performing a rigorous, honest resume critique. Be direct, specific and quote actual text.
