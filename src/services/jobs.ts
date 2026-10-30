@@ -106,12 +106,22 @@ function inferLocation(resumeText: string, countryCode: string): string {
   return countryMap[countryCode] || 'united states'
 }
 
-function computeMatchScore(resumeText: string, title: string, description?: string): number {
+// Whole-word match, so "go" doesn't hit "Google" and "java" doesn't hit "JavaScript"
+function hasTerm(text: string, term: string): boolean {
+  return new RegExp(`(^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9])`).test(text)
+}
+
+export function computeMatchScore(resumeText: string, title: string, description?: string): number {
   const resume = resumeText.toLowerCase()
   const content = `${title} ${description || ''}`.toLowerCase()
 
-  const keywords = ['react', 'typescript', 'javascript', 'node', 'python', 'java', 'aws', 'sql', 'api', 'frontend', 'backend']
-  const matched = keywords.filter((keyword) => resume.includes(keyword) && content.includes(keyword)).length
+  // Tech terms that appear unchanged in English and German job titles
+  const keywords = [
+    'react', 'angular', 'vue', 'typescript', 'javascript', 'html', 'css', 'node', 'python', 'java', 'kotlin', 'swift',
+    'php', 'c#', '.net', 'go', 'aws', 'azure', 'docker', 'kubernetes', 'sql', 'api', 'devops', 'ux', 'ui', 'figma',
+    'frontend', 'front-end', 'backend', 'back-end', 'fullstack', 'full stack', 'web', 'mobile', 'cloud', 'data',
+  ]
+  const matched = keywords.filter((keyword) => hasTerm(resume, keyword) && hasTerm(content, keyword)).length
 
   const base = 70
   const bonus = Math.min(25, matched * 5)
@@ -127,6 +137,8 @@ export interface BAJob {
   referenznummer?: string
   stellenangebotsTitel?: string
   stellenangebotsart?: string
+  hauptberuf?: string
+  alleBerufe?: string[]
   firma?: string
   stellenlokationen?: Array<{ adresse?: { ort?: string; region?: string } }>
   datumErsteVeroeffentlichung?: string
@@ -234,7 +246,8 @@ export function mapBAJob(job: BAJob, index: number, resumeText: string, now = ne
     posted: relativeDate(job.datumErsteVeroeffentlichung, now),
     isRemote: Boolean(job.homeofficemoeglich),
     employmentType: baEmploymentType(job),
-    match: computeMatchScore(resumeText, job.stellenangebotsTitel || ''),
+    // The list API has no description, so the official occupation adds the missing signal
+    match: computeMatchScore(resumeText, job.stellenangebotsTitel || '', [job.hauptberuf, ...(job.alleBerufe ?? [])].join(' ')),
   }
 }
 
