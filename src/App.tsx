@@ -92,7 +92,7 @@ function App() {
         if (response.ok) {
           const data = await response.json()
           const countryCode = data.country_code?.toLowerCase()
-          const supportedCountries = ['us', 'gb', 'ca', 'de', 'fr', 'au', 'in']
+          const supportedCountries = ['us', 'gb', 'ca', 'de', 'se', 'fr', 'au', 'in']
           if (countryCode && supportedCountries.includes(countryCode)) {
             setJobsFilters((prev) => ({ ...prev, country: countryCode }))
           }
@@ -471,6 +471,7 @@ function App() {
                                   <option value="gb">🇬🇧 United Kingdom</option>
                                   <option value="ca">🇨🇦 Canada</option>
                                   <option value="de">🇩🇪 Germany</option>
+                                  <option value="se">🇸🇪 Sweden</option>
                                   <option value="fr">🇫🇷 France</option>
                                   <option value="au">🇦🇺 Australia</option>
                                   <option value="in">🇮🇳 India</option>
@@ -627,6 +628,11 @@ function App() {
                         {!isLoadingJobs && !jobsError && matchedJobs.length > 0 && jobsFilters.country === 'de' && (
                           <p className="text-[10px] text-gray-400 dark:text-gray-500 pt-1">
                             Jobs from the Bundesagentur für Arbeit · "Remote" = home office possible
+                          </p>
+                        )}
+                        {!isLoadingJobs && !jobsError && matchedJobs.length > 0 && jobsFilters.country === 'se' && (
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 pt-1">
+                            Jobs from Arbetsförmedlingen (JobTech)
                           </p>
                         )}
                       </div>

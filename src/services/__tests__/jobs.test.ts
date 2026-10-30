@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { buildBAParams, computeMatchScore, fetchMatchingJobs, inferGermanCity, mapBAJob, type JobsFilters } from '../jobs'
+import { buildBAParams, buildSEParams, computeMatchScore, fetchMatchingJobs, inferGermanCity, mapBAJob, mapSEJob, type JobsFilters } from '../jobs'
 
 const filters: JobsFilters = { country: 'de', datePosted: 'week', remoteOnly: false, employmentType: 'all', keyword: '' }
 const resume = 'Jane Doe · München, Germany\nFrontend developer with React. Previously interned in Berlin.'
@@ -68,6 +68,46 @@ describe('Bundesagentur job search', () => {
 
     const jobs = await fetchMatchingJobs(resume, { ...filters, remoteOnly: true })
     expect(fetchMock.mock.calls[0][0]).toMatch(/^\/api\/jobsuche\?/)
+    expect(jobs.map((j) => j.id)).toEqual(['b'])
+  })
+})
+
+describe('Swedish job search', () => {
+  const se: JobsFilters = { country: 'se', datePosted: 'week', remoteOnly: false, employmentType: 'all', keyword: '' }
+  const cv = 'Anna Svensson · Göteborg\nFrontend developer: React, TypeScript'
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('builds a Swedish query with the resume city and date window', () => {
+    expect(Object.fromEntries(buildSEParams(cv, se))).toEqual({
+      q: 'frontendutvecklare Göteborg', limit: '25', offset: '0', 'published-after': '10080',
+    })
+    const p = buildSEParams('no city', { ...se, keyword: 'react', datePosted: 'all', remoteOnly: true, page: 3 })
+    expect(Object.fromEntries(p)).toEqual({ q: 'react', limit: '25', offset: '50', remote: 'true' })
+  })
+
+  it('normalizes a JobSearch hit and scores on the description', () => {
+    const job = mapSEJob(
+      {
+        id: '31658258', headline: 'Frontend Developer', employer: { name: 'Techrytera AB' },
+        workplace_address: { municipality: 'Göteborg' }, webpage_url: 'https://arbetsformedlingen.se/platsbanken/annonser/31658258',
+        publication_date: '2026-10-28T09:00:00', working_hours_type: { label: 'Deltid' },
+        workplace_model: { label: 'Distansarbete' }, description: { text: 'We use React and TypeScript' },
+      },
+      0, cv, false, new Date('2026-10-30T12:00:00'),
+    )
+    expect(job).toMatchObject({
+      company: 'Techrytera AB', location: 'Göteborg, Sweden', posted: '2 days ago',
+      isRemote: true, employmentType: 'Part-time', match: 85,
+    })
+  })
+
+  it('calls JobSearch directly and filters working time locally', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      hits: [{ id: 'a', working_hours_type: { label: 'Deltid' } }, { id: 'b', working_hours_type: { label: 'Heltid' } }],
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+    const jobs = await fetchMatchingJobs(cv, { ...se, employmentType: 'FULLTIME' })
+    expect(fetchMock.mock.calls[0][0]).toMatch(/^https:\/\/jobsearch\.api\.jobtechdev\.se\/search\?/)
     expect(jobs.map((j) => j.id)).toEqual(['b'])
   })
 })
