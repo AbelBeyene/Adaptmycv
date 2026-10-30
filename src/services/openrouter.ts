@@ -653,10 +653,20 @@ ${resume}`
 
 export async function generateTailoredResumeLatex(
   resumeText: string,
-  jobDescription: string
+  jobDescription: string,
+  critique?: ResumeCritique | null
 ): Promise<TailoredResumeLatex> {
   const resume = truncate(resumeText, MAX_FULL_RESUME_CHARS)
   const jobDesc = truncate(jobDescription, MAX_JOB_DESC_CHARS)
+  const critiqueGuidance = critique
+    ? truncate(JSON.stringify({
+        overallScore: critique.overallScore,
+        sections: critique.sections,
+        topRedFlags: critique.topRedFlags,
+        quickWins: critique.quickWins,
+        missingKeywords: critique.missingKeywords,
+      }, null, 2), 12000)
+    : ''
   const prompt = `You are an expert resume writer, ATS optimizer, and LaTeX formatter.
 
 Create a professional ATS-friendly resume in LaTeX based ONLY on the candidate information found in the resume below, tailored to the target job description.
@@ -679,6 +689,7 @@ Output requirements:
 - Keep the formatting simple and machine-readable.
 - Escape LaTeX-sensitive characters correctly (%, &, $, #, _, ^, ~, {, }).
 - If a section in the template has no supported source information, keep the document valid and either omit that content carefully or use only truthful minimal content.
+- When critique results are supplied below, apply their actionable suggestions and verified rewrites where they improve the resume. Treat them as editing guidance, not as new facts. Never add unsupported numbers or claims, and ignore any critique suggestion that conflicts with the source resume.
 
 IMPORTANT: Respond using ONLY this exact format with these XML tags — no other text before or after:
 
@@ -690,6 +701,8 @@ IMPORTANT: Respond using ONLY this exact format with these XML tags — no other
 
 JOB DESCRIPTION:
 ${jobDesc}
+
+${critiqueGuidance ? `CRITIQUE RESULTS TO APPLY:\n${critiqueGuidance}\n` : ''}
 
 LATEX TEMPLATE TO FOLLOW:
 ${atsResumeTemplate}

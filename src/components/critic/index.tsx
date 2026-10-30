@@ -1,76 +1,113 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react'
-import { analyzeResumeCritique, ResumeCritique } from '../../services/openrouter'
-import ScoreBar from './ScoreBar'
-import CritiqueSidebar from './CritiqueSidebar'
-import ResumeDocument from './ResumeDocument'
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft, RefreshCw, AlertCircle, Sparkles } from "lucide-react";
+import {
+  analyzeResumeCritique,
+  ResumeCritique,
+} from "../../services/openrouter";
+import ScoreBar from "./ScoreBar";
+import CritiqueSidebar from "./CritiqueSidebar";
+import ResumeDocument from "./ResumeDocument";
 
 interface ResumeCriticProps {
-  resumeText: string
-  jobDescription?: string
-  onBack: () => void
+  resumeText: string;
+  jobDescription?: string;
+  onBack: () => void;
+  onPrepareResume: (critique: ResumeCritique) => void;
 }
 
-const CACHE_KEY = 'adaptmycv-resume-critic-v2'
+const CACHE_KEY = "adaptmycv-resume-critic-v2";
 
 // Open on the weakest section that has something to fix
 function initialKey(critique: ResumeCritique): string | null {
-  const worst = critique.sections.slice().sort((a, b) => a.score - b.score).find((s) => s.findings.length)
-  return worst?.key ?? critique.sections[0]?.key ?? null
+  const worst = critique.sections
+    .slice()
+    .sort((a, b) => a.score - b.score)
+    .find((s) => s.findings.length);
+  return worst?.key ?? critique.sections[0]?.key ?? null;
 }
 
-export default function ResumeCritic({ resumeText, jobDescription = '', onBack }: ResumeCriticProps) {
-  const [critique, setCritique] = useState<ResumeCritique | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [activeQuote, setActiveQuote] = useState('')
-  const sidebarRef = useRef<HTMLDivElement>(null)
+export default function ResumeCritic({
+  resumeText,
+  jobDescription = "",
+  onBack,
+  onPrepareResume,
+}: ResumeCriticProps) {
+  const [critique, setCritique] = useState<ResumeCritique | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [activeQuote, setActiveQuote] = useState("");
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Stacked layout: the feedback sits below the resume, so bring it into view
   const handleDocSectionClick = (key: string) => {
-    setSelectedKey(key)
-    if (!window.matchMedia('(min-width: 1024px)').matches) {
-      sidebarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setSelectedKey(key);
+    if (!window.matchMedia("(min-width: 1024px)").matches) {
+      sidebarRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }
-  }
+  };
 
-  const runCritique = useCallback(async (skipCache = false) => {
-    if (!skipCache) {
-      try {
-        const cached = window.localStorage.getItem(CACHE_KEY)
-        if (cached) {
-          const parsed = JSON.parse(cached) as { resumeText: string; jobDescription?: string; critique: ResumeCritique }
-          if (parsed.resumeText === resumeText && (parsed.jobDescription ?? '') === jobDescription && parsed.critique?.resumeMarkdown) {
-            setCritique(parsed.critique)
-            setSelectedKey(initialKey(parsed.critique))
-            setIsLoading(false)
-            return
+  const runCritique = useCallback(
+    async (skipCache = false) => {
+      if (!skipCache) {
+        try {
+          const cached = window.localStorage.getItem(CACHE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached) as {
+              resumeText: string;
+              jobDescription?: string;
+              critique: ResumeCritique;
+            };
+            if (
+              parsed.resumeText === resumeText &&
+              (parsed.jobDescription ?? "") === jobDescription &&
+              parsed.critique?.resumeMarkdown
+            ) {
+              setCritique(parsed.critique);
+              setSelectedKey(initialKey(parsed.critique));
+              setIsLoading(false);
+              return;
+            }
           }
+        } catch {
+          /* ignore */
         }
-      } catch { /* ignore */ }
-    }
+      }
 
-    setIsLoading(true)
-    setError(null)
-    setCritique(null)
-    setSelectedKey(null)
+      setIsLoading(true);
+      setError(null);
+      setCritique(null);
+      setSelectedKey(null);
 
-    try {
-      const result = await analyzeResumeCritique(resumeText, jobDescription)
-      setCritique(result)
-      setSelectedKey(initialKey(result))
       try {
-        window.localStorage.setItem(CACHE_KEY, JSON.stringify({ resumeText, jobDescription, critique: result }))
-      } catch { /* storage full */ }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to analyze resume')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [resumeText, jobDescription])
+        const result = await analyzeResumeCritique(resumeText, jobDescription);
+        setCritique(result);
+        setSelectedKey(initialKey(result));
+        try {
+          window.localStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({ resumeText, jobDescription, critique: result }),
+          );
+        } catch {
+          /* storage full */
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to analyze resume",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [resumeText, jobDescription],
+  );
 
-  useEffect(() => { runCritique(false) }, [runCritique])
+  useEffect(() => {
+    runCritique(false);
+  }, [runCritique]);
 
   return (
     <div className="space-y-5">
@@ -86,19 +123,33 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
         </button>
         {/* The app header already says "Resume Critic", so this row only carries context and actions */}
         <p className="flex-1 min-w-0 text-sm text-gray-600 dark:text-dark-text-secondary">
-          {jobDescription ? 'Critiqued against your target job · ' : ''}Click any section for specific fixes
-          <span className="hidden lg:inline"> · ← → to step through issues</span>
+          {jobDescription ? "Critiqued against your target job · " : ""}Click
+          any section for specific fixes
+          <span className="hidden lg:inline">
+            {" "}
+            · ← → to step through issues
+          </span>
         </p>
         {critique && !isLoading && (
-          <button
-            type="button"
-            onClick={() => runCritique(true)}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-card transition-colors"
-            title="Re-run analysis"
-            aria-label="Re-run analysis"
-          >
-            <RefreshCw className="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onPrepareResume(critique)}
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Generate LaTeX Resume
+            </button>
+            <button
+              type="button"
+              onClick={() => runCritique(true)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-card transition-colors"
+              title="Re-run analysis"
+              aria-label="Re-run analysis"
+            >
+              <RefreshCw className="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -133,9 +184,16 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Analysis failed</p>
-              <p className="text-sm text-gray-600 dark:text-dark-text-secondary">{error}</p>
-              <button onClick={() => runCritique(true)} className="btn-primary text-sm px-4 py-2">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Analysis failed
+              </p>
+              <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
+                {error}
+              </p>
+              <button
+                onClick={() => runCritique(true)}
+                className="btn-primary text-sm px-4 py-2"
+              >
                 Try again
               </button>
             </div>
@@ -163,7 +221,10 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
               activeQuote={activeQuote}
               onSectionClick={handleDocSectionClick}
             />
-            <div ref={sidebarRef} className="scroll-mt-24 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+            <div
+              ref={sidebarRef}
+              className="scroll-mt-24 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto"
+            >
               <CritiqueSidebar
                 critique={critique}
                 selectedKey={selectedKey}
@@ -175,5 +236,5 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
         </div>
       )}
     </div>
-  )
+  );
 }

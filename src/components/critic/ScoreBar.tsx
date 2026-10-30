@@ -1,38 +1,49 @@
-import { XCircle, Zap, Target } from 'lucide-react'
+import { XCircle, Zap, Target } from "lucide-react";
 
 interface ScoreBarProps {
-  score: number
-  redFlags: string[]
-  quickWins: string[]
-  missingKeywords: string[]
+  score: number;
+  redFlags: string[];
+  quickWins: string[];
+  missingKeywords: string[];
 }
 
 function barColor(score: number) {
-  if (score >= 70) return 'bg-green-500'
-  if (score >= 45) return 'bg-yellow-500'
-  return 'bg-red-500'
+  if (score >= 70) return "bg-green-500";
+  if (score >= 45) return "bg-yellow-500";
+  return "bg-red-500";
 }
 
 function scoreTextColor(score: number) {
-  if (score >= 70) return 'text-green-600 dark:text-green-400'
-  if (score >= 45) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-red-600 dark:text-red-400'
+  if (score >= 70) return "text-green-600 dark:text-green-400";
+  if (score >= 45) return "text-yellow-600 dark:text-yellow-400";
+  return "text-red-600 dark:text-red-400";
 }
 
 function scoreLabel(score: number) {
-  if (score >= 70) return 'Strong resume — minor polish remaining'
-  if (score >= 45) return 'Decent base — meaningful improvements available'
-  return 'Needs significant work before applying'
+  if (score >= 70) return "Strong resume — minor polish remaining";
+  if (score >= 45) return "Decent base — meaningful improvements available";
+  return "Needs significant work before applying";
 }
 
-export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }: ScoreBarProps) {
+export default function ScoreBar({
+  score,
+  redFlags,
+  quickWins,
+  missingKeywords,
+}: ScoreBarProps) {
   return (
     <div className="space-y-3">
       {/* Score row */}
       <div className="card p-4 flex items-center gap-5">
         <div className="flex flex-col items-center flex-shrink-0">
-          <span className={`text-4xl font-bold tabular-nums ${scoreTextColor(score)}`}>{score}</span>
-          <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">/ 100</span>
+          <span
+            className={`text-4xl font-bold tabular-nums ${scoreTextColor(score)}`}
+          >
+            {score}
+          </span>
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+            / 100
+          </span>
         </div>
         <div className="flex-1 space-y-1.5">
           <div className="h-2 rounded-full bg-gray-200 dark:bg-dark-border overflow-hidden">
@@ -41,7 +52,9 @@ export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }
               style={{ width: `${score}%` }}
             />
           </div>
-          <p className="text-xs text-gray-500 dark:text-dark-text-secondary">{scoreLabel(score)}</p>
+          <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
+            {scoreLabel(score)}
+          </p>
         </div>
       </div>
 
@@ -49,14 +62,19 @@ export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }
       {(redFlags.length > 0 || quickWins.length > 0) && (
         <div className="grid gap-3 sm:grid-cols-2">
           {redFlags.length > 0 && (
-            <div className="rounded-lg border border-red-200 dark:border-red-800/40 bg-red-50/60 dark:bg-red-900/10 p-3.5">
+            <div className="rounded-lg border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-card p-3.5">
               <div className="flex items-center gap-1.5 mb-2">
                 <XCircle className="w-4 h-4 text-red-500" />
-                <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">Top Red Flags</h3>
+                <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">
+                  Top Red Flags
+                </h3>
               </div>
               <ul className="space-y-1">
                 {redFlags.map((flag, i) => (
-                  <li key={i} className="text-xs text-red-700 dark:text-red-300 flex gap-2">
+                  <li
+                    key={i}
+                    className="text-xs text-red-700 dark:text-red-300 flex gap-2"
+                  >
                     <span className="font-bold flex-shrink-0">{i + 1}.</span>
                     {flag}
                   </li>
@@ -65,14 +83,19 @@ export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }
             </div>
           )}
           {quickWins.length > 0 && (
-            <div className="rounded-lg border border-green-200 dark:border-green-800/40 bg-green-50/60 dark:bg-green-900/10 p-3.5">
+            <div className="rounded-lg border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-card p-3.5">
               <div className="flex items-center gap-1.5 mb-2">
                 <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <h3 className="text-sm font-semibold text-green-800 dark:text-green-300">Quick Wins</h3>
+                <h3 className="text-sm font-semibold text-green-800 dark:text-green-300">
+                  Quick Wins
+                </h3>
               </div>
               <ul className="space-y-1">
                 {quickWins.map((win, i) => (
-                  <li key={i} className="text-xs text-green-700 dark:text-green-300 flex gap-2">
+                  <li
+                    key={i}
+                    className="text-xs text-green-700 dark:text-green-300 flex gap-2"
+                  >
                     <span className="font-bold flex-shrink-0">{i + 1}.</span>
                     {win}
                   </li>
@@ -85,14 +108,19 @@ export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }
 
       {/* Keywords from the target job that the resume never mentions */}
       {missingKeywords.length > 0 && (
-        <div className="rounded-lg border border-blue-200 dark:border-blue-800/40 bg-blue-50/60 dark:bg-blue-900/10 p-3.5">
+        <div className="rounded-lg border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-card p-3.5">
           <div className="flex items-center gap-1.5 mb-2">
             <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300">Missing Job Keywords</h3>
+            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+              Missing Job Keywords
+            </h3>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {missingKeywords.map((kw, i) => (
-              <span key={i} className="text-xs px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800/60 bg-white dark:bg-dark-card text-blue-700 dark:text-blue-300">
+              <span
+                key={i}
+                className="text-xs px-2 py-0.5 rounded-full border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-bg text-blue-700 dark:text-blue-300"
+              >
                 {kw}
               </span>
             ))}
@@ -100,5 +128,5 @@ export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }
         </div>
       )}
     </div>
-  )
+  );
 }
