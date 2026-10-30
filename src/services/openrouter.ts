@@ -3,6 +3,7 @@ import mammoth from 'mammoth'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import atsResumeTemplate from '../../template_ATS_resume.tex?raw'
 import { extractLatexFromResponse } from '../lib/latexParser'
+import { normalizeCritique, type ResumeCritique } from '../lib/critique'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -731,95 +732,69 @@ ${resume}`
   }
 }
 
-export interface CritiqueFinding {
-  quote: string      // exact text from the resume that is problematic; "" if section is absent
-  issue: string      // what's wrong
-  suggestion: string // exactly what to write or do instead
-}
+export type { CritiqueFinding, ResumeDocSection, ResumeCritique } from '../lib/critique'
 
-export interface ResumeDocSection {
-  key: string
-  title: string
-  text: string       // the resume text for this section, extracted by the model
-  score: number      // 0-10
-  status: 'pass' | 'warn' | 'fail'
-  findings: CritiqueFinding[]
-}
+// The critique echoes the whole resume back as Markdown, so it needs more of it than the
+// other calls; ~2k tokens in + ~4k out still fits one call under Groq's 12k TPM.
+const MAX_CRITIQUE_RESUME_CHARS = 8000
 
-export interface ResumeCritique {
-  overallScore: number
-  resumeMarkdown: string   // full resume rendered as clean Markdown for display
-  sections: ResumeDocSection[]
-  topRedFlags: string[]
-  quickWins: string[]
-}
+export async function analyzeResumeCritique(resumeText: string, jobDescription = ''): Promise<ResumeCritique> {
+  const resume = truncate(resumeText, MAX_CRITIQUE_RESUME_CHARS)
+  const job = jobDescription.trim() ? truncate(jobDescription.trim(), MAX_JOB_DESC_CHARS) : ''
 
-export async function analyzeResumeCritique(resumeText: string): Promise<ResumeCritique> {
-  const resume = truncate(resumeText, MAX_RESUME_CHARS)
-
-  const prompt = `You are a senior recruiter performing a rigorous resume critique. Be direct and quote actual text.
+  const prompt = `You are a senior recruiter performing a rigorous, honest resume critique. Be direct, specific and quote actual text.
 
 RESUME:
 ${resume}
-
-Return ONLY valid JSON with two things: (1) a Markdown rendering of the resume for display, and (2) a section-by-section critique with verbatim quotes.
+${job ? `\nTARGET JOB DESCRIPTION (judge relevance and keywords against this job):\n${job}\n` : ''}
+Return ONLY valid JSON with (1) a Markdown rendering of the resume for display and (2) a section-by-section critique with verbatim quotes.
 
 {
-  "overallScore": <0-100 weighted>,
-  "resumeMarkdown": <the full resume converted to clean Markdown — use # for name, ## for section headers, **bold** for job titles/companies, - for bullets. Preserve all real content.>,
+  "resumeMarkdown": <the full resume as clean Markdown: # for the name, contact details on the lines under it, ## for each section header, "**Job Title** · Company · Dates" for roles and degrees, - for bullets. Preserve ALL real content; never invent or drop text.>,
   "sections": [
     {
-      "key": <slug e.g. "contact">,
-      "title": <section name matching the ## heading in resumeMarkdown>,
-      "text": <full raw text for this section, max 300 chars>,
-      "score": <0-10>,
-      "status": <"pass"|"warn"|"fail">,
+      "key": <slug e.g. "experience">,
+      "title": <exactly the ## heading text used in resumeMarkdown; use "Contact" for the name/contact block>,
+      "score": <integer 0-10>,
+      "missing": <true only if this section does not exist in the resume>,
       "findings": [
         {
-          "quote": <exact verbatim phrase from the resume, or "" if section is missing>,
-          "issue": <what is wrong, 1 sentence>,
-          "suggestion": <exactly what to write or do, 1-2 sentences>
+          "quote": <exact verbatim phrase copied character-for-character from the resume (5-120 chars), or "" if the section is missing>,
+          "issue": <what is wrong and why it hurts, 1 sentence>,
+          "suggestion": <how to fix it, 1 sentence>,
+          "rewrite": <ready-to-paste replacement text for the quote (or new content for a missing section). Use only facts present in the resume; put [placeholders] for numbers you don't know. "" if not applicable.>
         }
       ]
     }
   ],
-  "topRedFlags": [<up to 3 critical issues>],
-  "quickWins": [<up to 3 high-impact easy fixes>]
+  "metrics": {
+    "clarity": <0-100: readability, structure, concise wording, consistent formatting>,
+    "impact": <0-100: quantified results, strong action verbs, ownership and outcomes>
+  },
+  "topRedFlags": [<up to 3 issues most likely to get this resume rejected>],
+  "quickWins": [<up to 3 high-impact fixes that take under 10 minutes>]${job ? `,
+  "missingKeywords": [<up to 12 important skills/keywords from the job description absent from the resume>]` : ''}
 }
 
 Rules:
-- resumeMarkdown must use ## headings whose text matches the section "title" fields exactly
-- Cover: contact, summary (or flag missing), work experience, education, skills. Add others if present.
-- Missing sections: status="fail", score=0, text="", findings=[{quote:"",issue:"Section is missing",suggestion:"..."}]
-- "quote" must be verbatim from the resume — never paraphrase
-- Max 3 findings per section
-- Scoring: 7-10=pass, 4-6=warn, 0-3=fail`
+- Always cover: Contact, Summary, Experience, Education, Skills (use the resume's own heading text). Add other sections that are present (Projects, Certifications, ...).
+- Missing section: missing=true, score=0, one finding with quote "", issue explaining the impact, and a rewrite drafting the section from facts in the resume.
+- "quote" must be verbatim — never paraphrase, never combine lines.
+- Max 3 findings per section, most important first. A strong section may have 0 findings.
+- Scores: 9-10 excellent, 7-8 good, 4-6 needs work, 0-3 serious problem. Do not inflate.${job ? '\n- Weigh relevance to the target job in every section score.' : ''}`
 
   const schemaHint = `{
-  "overallScore": 0,
-  "resumeMarkdown": "# Name\n## Section\ncontent",
-  "sections": [{"key":"contact","title":"","text":"","score":0,"status":"pass","findings":[{"quote":"","issue":"","suggestion":""}]}],
+  "resumeMarkdown": "# Name\\n## Section\\ncontent",
+  "sections": [{"key":"contact","title":"Contact","score":0,"missing":false,"findings":[{"quote":"","issue":"","suggestion":"","rewrite":""}]}],
+  "metrics": {"clarity": 0, "impact": 0},
   "topRedFlags": [],
-  "quickWins": []
+  "quickWins": [],
+  "missingKeywords": []
 }`
 
   const response = await callOpenRouterAPI([{ role: 'user', content: prompt }], true)
-  const parsed = await parseJsonResponse<ResumeCritique>(response, schemaHint)
-
-  if (
-    typeof parsed.overallScore !== 'number' ||
-    typeof parsed.resumeMarkdown !== 'string' ||
-    !Array.isArray(parsed.sections) ||
-    !Array.isArray(parsed.topRedFlags) ||
-    !Array.isArray(parsed.quickWins)
-  ) {
-    throw new Error('Invalid critique response structure from API')
-  }
-
-  return {
-    ...parsed,
-    overallScore: Math.min(100, Math.max(0, Math.round(parsed.overallScore))),
-  }
+  const parsed = await parseJsonResponse<unknown>(response, schemaHint)
+  return normalizeCritique(parsed, resumeText)
 }
 
 export function buildLatexPdfUrl(latex: string, filename = 'adapted-harvard-resume.pdf'): string {
