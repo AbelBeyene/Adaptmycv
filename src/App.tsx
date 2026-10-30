@@ -252,6 +252,7 @@ function App() {
   const handleReset = () => {
     uploadGenerationRef.current += 1;
     window.localStorage.removeItem(APP_CACHE_KEY);
+    window.localStorage.removeItem(RESUME_STORE_KEY);
     window.localStorage.removeItem("adaptmycv-resume-studio-v1");
     setCurrentStep("upload");
     setResumeFileName("");
