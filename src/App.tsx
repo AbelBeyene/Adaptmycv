@@ -476,13 +476,6 @@ function App() {
                         </span>
                       </div>
 
-                      <div className="rounded border border-gray-200 dark:border-dark-border overflow-hidden bg-white dark:bg-dark-card">
-                        <img
-                          src="/resume-preview.svg"
-                          alt="Screenshot-style preview of a resume"
-                          className="w-full h-80 object-cover object-top"
-                        />
-                      </div>
                     </div>
 
                     {currentStep === "results" &&
