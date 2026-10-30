@@ -13,73 +13,57 @@ import type { PrioritizedRecommendation } from './components/AnalysisResults'
 type AppStep = 'upload' | 'job' | 'results' | 'prepare' | 'critic'
 const APP_CACHE_KEY = 'adaptmycv-app-state-v1'
 
+type AppCache = Partial<{
+  currentStep: AppStep
+  resumeText: string
+  jobDescription: string
+  isDark: boolean
+  sidebarRecommendations: PrioritizedRecommendation[]
+  jobsFilters: JobsFilters
+  selectedJobLink: string
+}>
+
+// Read synchronously so the first paint is already the restored screen (no flash of the upload step),
+// and so the persist effect can't overwrite the cache before it's read (StrictMode runs effects twice).
+function readAppCache(): AppCache {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(APP_CACHE_KEY) ?? '{}') as AppCache
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (error) {
+    console.warn('Failed to restore app cache:', error)
+    return {}
+  }
+}
+
 function App() {
   const progressSteps: AppStep[] = ['upload', 'job', 'results']
-  const [currentStep, setCurrentStep] = useState<AppStep>('upload')
+  const [cache] = useState(readAppCache)
+  const [currentStep, setCurrentStep] = useState<AppStep>(cache.currentStep ?? 'upload')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [resumeFileName, setResumeFileName] = useState('')
-  const [resumeText, setResumeText] = useState('')
-  const [jobDescription, setJobDescription] = useState('')
-  const [isDark, setIsDark] = useState(true)
+  const [resumeText, setResumeText] = useState(typeof cache.resumeText === 'string' ? cache.resumeText : '')
+  const [jobDescription, setJobDescription] = useState(typeof cache.jobDescription === 'string' ? cache.jobDescription : '')
+  const [isDark, setIsDark] = useState(typeof cache.isDark === 'boolean' ? cache.isDark : true)
   const [resumePreviewUrl, setResumePreviewUrl] = useState<string | null>(null)
-  const [sidebarRecommendations, setSidebarRecommendations] = useState<PrioritizedRecommendation[]>([])
+  const [sidebarRecommendations, setSidebarRecommendations] = useState<PrioritizedRecommendation[]>(
+    Array.isArray(cache.sidebarRecommendations) ? cache.sidebarRecommendations : []
+  )
   const [matchedJobs, setMatchedJobs] = useState<MatchingJob[]>([])
   const [isLoadingJobs, setIsLoadingJobs] = useState(false)
   const [jobsError, setJobsError] = useState<string | null>(null)
-  const [jobsFilters, setJobsFilters] = useState<JobsFilters>({
-    country: 'us',
-    datePosted: 'week',
-    remoteOnly: false,
-    employmentType: 'all',
-    keyword: '',
-  })
+  const [jobsFilters, setJobsFilters] = useState<JobsFilters>(
+    cache.jobsFilters ?? {
+      country: 'us',
+      datePosted: 'week',
+      remoteOnly: false,
+      employmentType: 'all',
+      keyword: '',
+    }
+  )
   const [showFilters, setShowFilters] = useState(false)
   const [selectedJobForAction, setSelectedJobForAction] = useState<MatchingJob | null>(null)
-  const [selectedJobLink, setSelectedJobLink] = useState('')
+  const [selectedJobLink, setSelectedJobLink] = useState(typeof cache.selectedJobLink === 'string' ? cache.selectedJobLink : '')
   const filtersRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    try {
-      const cachedState = window.localStorage.getItem(APP_CACHE_KEY)
-      if (!cachedState) {
-        return
-      }
-
-      const parsed = JSON.parse(cachedState) as Partial<{
-        currentStep: AppStep
-        resumeText: string
-        jobDescription: string
-        isDark: boolean
-        sidebarRecommendations: PrioritizedRecommendation[]
-        jobsFilters: JobsFilters
-        selectedJobLink: string
-      }>
-
-      if (parsed.currentStep) {
-        setCurrentStep(parsed.currentStep)
-      }
-      if (typeof parsed.resumeText === 'string') {
-        setResumeText(parsed.resumeText)
-      }
-      if (typeof parsed.jobDescription === 'string') {
-        setJobDescription(parsed.jobDescription)
-      }
-      if (typeof parsed.isDark === 'boolean') {
-        setIsDark(parsed.isDark)
-      }
-      if (Array.isArray(parsed.sidebarRecommendations)) {
-        setSidebarRecommendations(parsed.sidebarRecommendations)
-      }
-      if (parsed.jobsFilters) {
-        setJobsFilters(parsed.jobsFilters)
-      }
-      if (typeof parsed.selectedJobLink === 'string') {
-        setSelectedJobLink(parsed.selectedJobLink)
-      }
-    } catch (error) {
-      console.warn('Failed to restore app cache:', error)
-    }
-  }, [])
 
   useEffect(() => {
     try {
@@ -101,6 +85,7 @@ function App() {
   }, [currentStep, resumeText, jobDescription, isDark, sidebarRecommendations, jobsFilters, selectedJobLink])
 
   useEffect(() => {
+    if (cache.jobsFilters) return // keep the country the user already chose
     const detectCountry = async () => {
       try {
         const response = await fetch('https://ipapi.co/json/')
@@ -118,7 +103,7 @@ function App() {
     }
 
     detectCountry()
-  }, [])
+  }, [cache.jobsFilters])
 
   useEffect(() => {
     if (!resumeFile || !resumeFile.type.includes('pdf')) {
@@ -356,7 +341,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-3 text-center text-xs sm:text-sm text-gray-600 dark:text-dark-text-secondary">
                   <span>Upload</span>
-                  <span>Resume Job Desc</span>
+                  <span>Job Description</span>
                   <span>Analysis</span>
                 </div>
               </div>

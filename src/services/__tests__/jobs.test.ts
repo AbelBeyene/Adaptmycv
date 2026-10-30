@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { buildBAParams, fetchMatchingJobs, inferGermanCity, mapBAJob, type JobsFilters } from '../jobs'
+import { buildBAParams, computeMatchScore, fetchMatchingJobs, inferGermanCity, mapBAJob, type JobsFilters } from '../jobs'
 
 const filters: JobsFilters = { country: 'de', datePosted: 'week', remoteOnly: false, employmentType: 'all', keyword: '' }
 const resume = 'Jane Doe · München, Germany\nFrontend developer with React. Previously interned in Berlin.'
@@ -50,6 +50,14 @@ describe('Bundesagentur job search', () => {
       employmentType: 'Full-time',
     })
     expect(mapBAJob({}, 3, resume).location).toBe('Germany')
+  })
+
+  it('scores on whole words shared by resume and posting', () => {
+    const cv = 'Frontend developer: React, HTML, CSS, JavaScript'
+    expect(computeMatchScore(cv, 'Entwickler HTML / CSS', 'Webentwickler/in')).toBe(80)
+    expect(computeMatchScore(cv, 'Java Backend (m/w/d)')).toBe(70) // "javascript" must not count as "java"
+    expect(computeMatchScore('Built tools at Google', 'Go Developer')).toBe(70) // "google" must not count as "go"
+    expect(computeMatchScore(cv, 'React Frontend Developer')).toBe(80)
   })
 
   it('routes Germany through the proxy and filters remote locally', async () => {

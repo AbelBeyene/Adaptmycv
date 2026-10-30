@@ -24,6 +24,7 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [activeQuote, setActiveQuote] = useState('')
   const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Stacked layout: the feedback sits below the resume, so bring it into view
@@ -76,23 +77,25 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={onBack}
+          aria-label="Back"
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-card transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex-1 min-w-0">
-          <h2 className="section-title">Resume Critic</h2>
-          <p className="section-subtitle mt-0.5">
-            {jobDescription ? 'Critiqued against your target job · ' : ''}Click any section for specific fixes · ← → to step through issues
-          </p>
-        </div>
+        {/* The app header already says "Resume Critic", so this row only carries context and actions */}
+        <p className="flex-1 min-w-0 text-sm text-gray-600 dark:text-dark-text-secondary">
+          {jobDescription ? 'Critiqued against your target job · ' : ''}Click any section for specific fixes
+          <span className="hidden lg:inline"> · ← → to step through issues</span>
+        </p>
         {critique && !isLoading && (
           <button
             type="button"
             onClick={() => runCritique(true)}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-card transition-colors"
             title="Re-run analysis"
+            aria-label="Re-run analysis"
           >
             <RefreshCw className="w-4 h-4 text-gray-500 dark:text-dark-text-secondary" />
           </button>
@@ -151,11 +154,13 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
           />
 
           {/* Resume doc (left) + critique sidebar (right); stacked on mobile */}
-          <div className="grid gap-5 items-start lg:grid-cols-[minmax(0,1fr)_380px]">
+          {/* grid-cols-1 = minmax(0,1fr): without it the implicit column grows to the widest line and overflows phones */}
+          <div className="grid grid-cols-1 gap-5 items-start lg:grid-cols-[minmax(0,1fr)_380px]">
             <ResumeDocument
               markdown={critique.resumeMarkdown}
               sections={critique.sections}
               selectedKey={selectedKey}
+              activeQuote={activeQuote}
               onSectionClick={handleDocSectionClick}
             />
             <div ref={sidebarRef} className="scroll-mt-24 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
@@ -163,6 +168,7 @@ export default function ResumeCritic({ resumeText, jobDescription = '', onBack }
                 critique={critique}
                 selectedKey={selectedKey}
                 onSectionSelect={setSelectedKey}
+                onActiveQuoteChange={setActiveQuote}
               />
             </div>
           </div>

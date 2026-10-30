@@ -6,6 +6,7 @@ interface CritiqueSidebarProps {
   critique: ResumeCritique
   selectedKey: string | null
   onSectionSelect: (key: string) => void
+  onActiveQuoteChange: (quote: string) => void
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -240,7 +241,7 @@ function AllIssues({
 
 // ─── main ─────────────────────────────────────────────────────────────────────
 
-export default function CritiqueSidebar({ critique, selectedKey, onSectionSelect }: CritiqueSidebarProps) {
+export default function CritiqueSidebar({ critique, selectedKey, onSectionSelect, onActiveQuoteChange }: CritiqueSidebarProps) {
   const allFindings = useMemo(() => flattenFindings(critique.sections), [critique.sections])
   const [featuredIdx, setFeaturedIdx] = useState(0)
 
@@ -253,6 +254,10 @@ export default function CritiqueSidebar({ critique, selectedKey, onSectionSelect
 
   const selectedSection = critique.sections.find((s) => s.key === selectedKey)
   const featured = allFindings[effectiveIdx]
+
+  // Lets the document highlight exactly the text this card is about
+  const activeQuote = selectedSection && selectedSection.findings.length === 0 ? '' : featured?.finding.quote ?? ''
+  useEffect(() => { onActiveQuoteChange(activeQuote) }, [activeQuote, onActiveQuoteChange])
 
   const goTo = (idx: number) => {
     const target = allFindings[idx]
