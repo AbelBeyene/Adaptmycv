@@ -731,18 +731,25 @@ ${resume}`
   }
 }
 
-export interface CritiqueSection {
+export interface CritiqueFinding {
+  quote: string      // exact text from the resume that is problematic; "" if section is absent
+  issue: string      // what's wrong
+  suggestion: string // exactly what to write or do instead
+}
+
+export interface ResumeDocSection {
   key: string
   title: string
-  score: number
+  text: string       // the resume text for this section, extracted by the model
+  score: number      // 0-10
   status: 'pass' | 'warn' | 'fail'
-  findings: string[]
-  suggestions: string[]
+  findings: CritiqueFinding[]
 }
 
 export interface ResumeCritique {
   overallScore: number
-  sections: CritiqueSection[]
+  resumeMarkdown: string   // full resume rendered as clean Markdown for display
+  sections: ResumeDocSection[]
   topRedFlags: string[]
   quickWins: string[]
 }
@@ -750,37 +757,48 @@ export interface ResumeCritique {
 export async function analyzeResumeCritique(resumeText: string): Promise<ResumeCritique> {
   const resume = truncate(resumeText, MAX_RESUME_CHARS)
 
-  const prompt = `You are a senior recruiter and resume expert. Critically evaluate this resume across 11 professional criteria. Be direct and specific — reference actual content from the resume.
+  const prompt = `You are a senior recruiter performing a rigorous resume critique. Be direct and quote actual text.
 
 RESUME:
 ${resume}
 
-Respond with ONLY valid JSON, no markdown, no extra text:
+Return ONLY valid JSON with two things: (1) a Markdown rendering of the resume for display, and (2) a section-by-section critique with verbatim quotes.
 
 {
-  "overallScore": <weighted average 0-100>,
+  "overallScore": <0-100 weighted>,
+  "resumeMarkdown": <the full resume converted to clean Markdown — use # for name, ## for section headers, **bold** for job titles/companies, - for bullets. Preserve all real content.>,
   "sections": [
-    {"key":"contact","title":"Contact & Basic Info","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[<up to 3 specific observations>],"suggestions":[<up to 3 actionable fixes>]},
-    {"key":"formatting","title":"Formatting & ATS Compatibility","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"summary","title":"Professional Summary","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"experience","title":"Work Experience","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"gaps","title":"Employment Gaps","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"keywords","title":"Keywords & Relevance","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"skills","title":"Skills Section","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"education","title":"Education & Certifications","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"redflags","title":"Red Flags","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"tailoring","title":"Tailoring & Personalization","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]},
-    {"key":"tone","title":"Tone & Language Quality","score":<0-10>,"status":<"pass"|"warn"|"fail">,"findings":[...],"suggestions":[...]}
+    {
+      "key": <slug e.g. "contact">,
+      "title": <section name matching the ## heading in resumeMarkdown>,
+      "text": <full raw text for this section, max 300 chars>,
+      "score": <0-10>,
+      "status": <"pass"|"warn"|"fail">,
+      "findings": [
+        {
+          "quote": <exact verbatim phrase from the resume, or "" if section is missing>,
+          "issue": <what is wrong, 1 sentence>,
+          "suggestion": <exactly what to write or do, 1-2 sentences>
+        }
+      ]
+    }
   ],
-  "topRedFlags": [<up to 3 most critical issues hurting this resume>],
-  "quickWins": [<up to 3 high-impact easy improvements>]
+  "topRedFlags": [<up to 3 critical issues>],
+  "quickWins": [<up to 3 high-impact easy fixes>]
 }
 
-Scoring: pass=7-10 (meets standard), warn=4-6 (needs work), fail=0-3 (significant problem). For employment gaps: if no gaps exist, score 10 and status pass.`
+Rules:
+- resumeMarkdown must use ## headings whose text matches the section "title" fields exactly
+- Cover: contact, summary (or flag missing), work experience, education, skills. Add others if present.
+- Missing sections: status="fail", score=0, text="", findings=[{quote:"",issue:"Section is missing",suggestion:"..."}]
+- "quote" must be verbatim from the resume — never paraphrase
+- Max 3 findings per section
+- Scoring: 7-10=pass, 4-6=warn, 0-3=fail`
 
   const schemaHint = `{
   "overallScore": 0,
-  "sections": [{"key":"contact","title":"","score":0,"status":"pass","findings":[],"suggestions":[]}],
+  "resumeMarkdown": "# Name\n## Section\ncontent",
+  "sections": [{"key":"contact","title":"","text":"","score":0,"status":"pass","findings":[{"quote":"","issue":"","suggestion":""}]}],
   "topRedFlags": [],
   "quickWins": []
 }`
@@ -790,6 +808,7 @@ Scoring: pass=7-10 (meets standard), warn=4-6 (needs work), fail=0-3 (significan
 
   if (
     typeof parsed.overallScore !== 'number' ||
+    typeof parsed.resumeMarkdown !== 'string' ||
     !Array.isArray(parsed.sections) ||
     !Array.isArray(parsed.topRedFlags) ||
     !Array.isArray(parsed.quickWins)
