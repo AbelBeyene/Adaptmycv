@@ -180,13 +180,17 @@ const GERMAN_CITIES: Array<[RegExp, string]> = [
 ]
 
 // The city mentioned first is usually the address in the resume header
-export function inferGermanCity(resumeText: string): string | null {
+function firstMatch(resumeText: string, cities: Array<[RegExp, string]>): string | null {
   let best: { index: number; city: string } | null = null
-  for (const [pattern, city] of GERMAN_CITIES) {
+  for (const [pattern, city] of cities) {
     const index = resumeText.search(pattern)
     if (index >= 0 && (!best || index < best.index)) best = { index, city }
   }
   return best?.city ?? null
+}
+
+export function inferGermanCity(resumeText: string): string | null {
+  return firstMatch(resumeText, GERMAN_CITIES)
 }
 
 const BA_DAYS: Record<JobsFilters['datePosted'], number | null> = { all: null, today: 0, '3days': 3, week: 7, month: 30 }
@@ -267,8 +271,104 @@ async function fetchGermanJobs(resumeText: string, filters: JobsFilters, signal?
     .slice(0, 10)
 }
 
+// ─── Sweden: Arbetsförmedlingen JobSearch (JobTech, free, no key, CORS-enabled) ─
+const SE_SEARCH_URL = 'https://jobsearch.api.jobtechdev.se/search'
+
+export interface SEJob {
+  id?: string
+  headline?: string
+  employer?: { name?: string }
+  workplace_address?: { municipality?: string; city?: string }
+  webpage_url?: string
+  publication_date?: string
+  working_hours_type?: { label?: string | null }
+  workplace_model?: { label?: string | null }
+  occupation?: { label?: string }
+  description?: { text?: string }
+}
+
+// Swedish titles return more postings (frontendutvecklare: 45 vs "frontend developer": 13)
+const SWEDISH_ROLES: Record<string, string> = {
+  'frontend developer': 'frontendutvecklare',
+  'backend developer': 'backend',
+  'full stack developer': 'fullstack',
+  'software engineer': 'systemutvecklare',
+  'software developer': 'systemutvecklare',
+}
+
+const SWEDISH_CITIES: Array<[RegExp, string]> = [
+  [/\bstockholm\b/i, 'Stockholm'],
+  [/\b(göteborg|goteborg|gothenburg)\b/i, 'Göteborg'],
+  [/\b(malmö|malmo)\b/i, 'Malmö'],
+  [/\buppsala\b/i, 'Uppsala'],
+  [/\b(linköping|linkoping)\b/i, 'Linköping'],
+  [/\b(västerås|vasteras)\b/i, 'Västerås'],
+  [/\b(örebro|orebro)\b/i, 'Örebro'],
+  [/\bhelsingborg\b/i, 'Helsingborg'],
+  [/\blund\b/i, 'Lund'],
+  [/\b(umeå|umea)\b/i, 'Umeå'],
+]
+
+const SE_MINUTES: Record<JobsFilters['datePosted'], number | null> = {
+  all: null, today: 1440, '3days': 4320, week: 10080, month: 43200,
+}
+const SE_PAGE_SIZE = 25
+
+export function buildSEParams(resumeText: string, filters: JobsFilters): URLSearchParams {
+  const role = inferRole(resumeText)
+  // The city goes into the free-text query: municipality filters need concept ids
+  const city = firstMatch(resumeText, SWEDISH_CITIES)
+  const params = new URLSearchParams({
+    q: filters.keyword.trim() || [SWEDISH_ROLES[role] || role, city].filter(Boolean).join(' '),
+    limit: String(SE_PAGE_SIZE),
+    offset: String(((filters.page || 1) - 1) * SE_PAGE_SIZE),
+  })
+  const minutes = SE_MINUTES[filters.datePosted]
+  if (minutes !== null) params.set('published-after', String(minutes))
+  if (filters.remoteOnly) params.set('remote', 'true')
+  return params
+}
+
+export function mapSEJob(job: SEJob, index: number, resumeText: string, remoteOnly = false, now = new Date()): MatchingJob {
+  const hours = job.working_hours_type?.label
+  const place = job.workplace_address?.municipality || job.workplace_address?.city
+  return {
+    id: job.id || `se-${index}`,
+    title: job.headline || 'Untitled role',
+    company: job.employer?.name || 'Unknown company',
+    location: place ? `${place}, Sweden` : 'Sweden',
+    // Platsbanken page: full description (readable by "Use") plus the employer's apply link
+    applyLink: job.webpage_url || '#',
+    posted: relativeDate(job.publication_date?.slice(0, 10), now),
+    isRemote: remoteOnly || /distans|hybrid/i.test(job.workplace_model?.label ?? ''),
+    employmentType: hours === 'Heltid' ? 'Full-time' : hours === 'Deltid' ? 'Part-time' : 'Full-time',
+    match: computeMatchScore(resumeText, job.headline || '', `${job.occupation?.label ?? ''} ${job.description?.text ?? ''}`),
+  }
+}
+
+async function fetchSwedishJobs(resumeText: string, filters: JobsFilters, signal?: AbortSignal): Promise<MatchingJob[]> {
+  const response = await fetch(`${SE_SEARCH_URL}?${buildSEParams(resumeText, filters).toString()}`, {
+    headers: { accept: 'application/json' },
+    signal: signal ?? AbortSignal.timeout(20_000),
+  })
+  if (!response.ok) {
+    throw new Error(`Swedish job search failed (${response.status}). Please try again shortly.`)
+  }
+
+  const payload = (await response.json()) as { hits?: SEJob[] }
+  // Working-time filter is a concept-id lookup server-side; the label is reliable enough here.
+  // Internship/contract have no clean equivalent, so those types are left unfiltered.
+  const wantedHours = filters.employmentType === 'FULLTIME' ? 'Heltid' : filters.employmentType === 'PARTTIME' ? 'Deltid' : null
+  return (payload.hits ?? [])
+    .filter((job) => !wantedHours || job.working_hours_type?.label === wantedHours)
+    .map((job, index) => mapSEJob(job, index, resumeText, filters.remoteOnly))
+    .sort((a, b) => b.match - a.match)
+    .slice(0, 10)
+}
+
 export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters, signal?: AbortSignal): Promise<MatchingJob[]> {
   if (filters.country === 'de') return fetchGermanJobs(resumeText, filters, signal)
+  if (filters.country === 'se') return fetchSwedishJobs(resumeText, filters, signal)
 
   if (!RAPID_API_KEY) {
     throw new Error('Missing VITE_RAPIDAPI_KEY. Add it to your .env.local file.')
