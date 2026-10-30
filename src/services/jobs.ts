@@ -118,7 +118,145 @@ function computeMatchScore(resumeText: string, title: string, description?: stri
   return Math.max(60, Math.min(98, base + bonus))
 }
 
+// ─── Germany: Bundesagentur für Arbeit Jobsuche (free, no account) ─────────────
+// Called through our own proxy (/api/jobsuche: Vite dev proxy locally, Vercel function in prod)
+// because the API needs an X-API-Key header and sends no CORS headers.
+const BA_PROXY_URL = '/api/jobsuche'
+
+export interface BAJob {
+  referenznummer?: string
+  stellenangebotsTitel?: string
+  stellenangebotsart?: string
+  firma?: string
+  stellenlokationen?: Array<{ adresse?: { ort?: string; region?: string } }>
+  datumErsteVeroeffentlichung?: string
+  homeofficemoeglich?: boolean
+  arbeitszeitVollzeit?: boolean
+  arbeitszeitTeilzeitVormittag?: boolean
+  arbeitszeitTeilzeitNachmittag?: boolean
+  arbeitszeitTeilzeitAbend?: boolean
+  arbeitszeitTeilzeitFlexibel?: boolean
+}
+
+// German titles return 2-8x more postings than the English ones (e.g. Softwareentwickler vs software developer)
+const GERMAN_ROLES: Record<string, string> = {
+  'frontend developer': 'Frontend-Entwickler',
+  'backend developer': 'Backend-Entwickler',
+  'full stack developer': 'Fullstack-Entwickler',
+  'software engineer': 'Softwareentwickler',
+  'software developer': 'Softwareentwickler',
+}
+
+// The API only understands German place names ("Munich" returns nothing)
+const GERMAN_CITIES: Array<[RegExp, string]> = [
+  [/\bberlin\b/i, 'Berlin'],
+  [/\bhamburg\b/i, 'Hamburg'],
+  [/\b(munich|münchen|muenchen)\b/i, 'München'],
+  [/\b(cologne|köln|koeln)\b/i, 'Köln'],
+  [/\bfrankfurt\b/i, 'Frankfurt am Main'],
+  [/\bstuttgart\b/i, 'Stuttgart'],
+  [/\b(düsseldorf|dusseldorf|duesseldorf)\b/i, 'Düsseldorf'],
+  [/\bleipzig\b/i, 'Leipzig'],
+  [/\bdresden\b/i, 'Dresden'],
+  [/\b(hannover|hanover)\b/i, 'Hannover'],
+  [/\b(nuremberg|nürnberg|nuernberg)\b/i, 'Nürnberg'],
+  [/\bbremen\b/i, 'Bremen'],
+  [/\bdortmund\b/i, 'Dortmund'],
+  [/\bbonn\b/i, 'Bonn'],
+  [/\bmannheim\b/i, 'Mannheim'],
+  [/\bkarlsruhe\b/i, 'Karlsruhe'],
+]
+
+// The city mentioned first is usually the address in the resume header
+export function inferGermanCity(resumeText: string): string | null {
+  let best: { index: number; city: string } | null = null
+  for (const [pattern, city] of GERMAN_CITIES) {
+    const index = resumeText.search(pattern)
+    if (index >= 0 && (!best || index < best.index)) best = { index, city }
+  }
+  return best?.city ?? null
+}
+
+const BA_DAYS: Record<JobsFilters['datePosted'], number | null> = { all: null, today: 0, '3days': 3, week: 7, month: 30 }
+
+export function buildBAParams(resumeText: string, filters: JobsFilters): URLSearchParams {
+  const role = inferRole(resumeText)
+  const city = inferGermanCity(resumeText)
+  const params = new URLSearchParams({
+    was: filters.keyword.trim() || GERMAN_ROLES[role] || role,
+    page: String(filters.page || 1),
+    // Remote can't be filtered server-side in v6, so fetch more and filter locally
+    size: filters.remoteOnly ? '100' : '25',
+    angebotsart: filters.employmentType === 'INTERN' ? '34' : filters.employmentType === 'CONTRACTOR' ? '2' : '1',
+  })
+  if (city) {
+    params.set('wo', city)
+    params.set('umkreis', String(filters.radius || 50))
+  }
+  const days = BA_DAYS[filters.datePosted]
+  if (days !== null) params.set('veroeffentlichtseit', String(days))
+  if (filters.employmentType === 'FULLTIME') params.set('arbeitszeit', 'vz')
+  if (filters.employmentType === 'PARTTIME') params.set('arbeitszeit', 'tz')
+  return params
+}
+
+function relativeDate(isoDate: string | undefined, now = new Date()): string {
+  const posted = isoDate ? new Date(`${isoDate}T00:00:00`) : null
+  if (!posted || Number.isNaN(posted.getTime())) return 'Recently'
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const days = Math.max(0, Math.round((today.getTime() - posted.getTime()) / 86_400_000))
+  return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-days, 'day').replace(/^./, (c) => c.toUpperCase())
+}
+
+function baEmploymentType(job: BAJob): string {
+  if (job.stellenangebotsart === 'PRAKTIKUM_TRAINEE') return 'Internship / Trainee'
+  if (job.stellenangebotsart === 'SELBSTAENDIGKEIT') return 'Self-employed'
+  const partTime = job.arbeitszeitTeilzeitVormittag || job.arbeitszeitTeilzeitNachmittag || job.arbeitszeitTeilzeitAbend || job.arbeitszeitTeilzeitFlexibel
+  if (job.arbeitszeitVollzeit && partTime) return 'Full-time / Part-time'
+  if (job.arbeitszeitVollzeit) return 'Full-time'
+  if (partTime) return 'Part-time'
+  return 'Full-time'
+}
+
+export function mapBAJob(job: BAJob, index: number, resumeText: string, now = new Date()): MatchingJob {
+  const places = (job.stellenlokationen ?? []).map((l) => l.adresse?.ort).filter((o): o is string => !!o)
+  const uniquePlaces = [...new Set(places)]
+  const ref = job.referenznummer
+  return {
+    id: ref || `ba-${index}`,
+    title: job.stellenangebotsTitel || 'Untitled role',
+    company: job.firma || 'Unknown company',
+    location: uniquePlaces.length
+      ? `${uniquePlaces[0]}${uniquePlaces.length > 1 ? ` +${uniquePlaces.length - 1}` : ''}, Germany`
+      : 'Germany',
+    // The BA detail page carries the full description (readable by "Use") and links on to the employer
+    applyLink: ref ? `https://www.arbeitsagentur.de/jobsuche/jobdetail/${encodeURIComponent(ref)}` : '#',
+    posted: relativeDate(job.datumErsteVeroeffentlichung, now),
+    isRemote: Boolean(job.homeofficemoeglich),
+    employmentType: baEmploymentType(job),
+    match: computeMatchScore(resumeText, job.stellenangebotsTitel || ''),
+  }
+}
+
+async function fetchGermanJobs(resumeText: string, filters: JobsFilters, signal?: AbortSignal): Promise<MatchingJob[]> {
+  const response = await fetch(`${BA_PROXY_URL}?${buildBAParams(resumeText, filters).toString()}`, {
+    signal: signal ?? AbortSignal.timeout(20_000),
+  })
+  if (!response.ok) {
+    throw new Error(`Bundesagentur job search failed (${response.status}). Please try again shortly.`)
+  }
+
+  const payload = (await response.json()) as { ergebnisliste?: BAJob[] }
+  return (payload.ergebnisliste ?? [])
+    .filter((job) => !filters.remoteOnly || job.homeofficemoeglich)
+    .map((job, index) => mapBAJob(job, index, resumeText))
+    .sort((a, b) => b.match - a.match)
+    .slice(0, 10)
+}
+
 export async function fetchMatchingJobs(resumeText: string, filters: JobsFilters, signal?: AbortSignal): Promise<MatchingJob[]> {
+  if (filters.country === 'de') return fetchGermanJobs(resumeText, filters, signal)
+
   if (!RAPID_API_KEY) {
     throw new Error('Missing VITE_RAPIDAPI_KEY. Add it to your .env.local file.')
   }

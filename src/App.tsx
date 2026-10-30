@@ -638,6 +638,12 @@ function App() {
                             </div>
                           )
                         })}
+
+                        {!isLoadingJobs && !jobsError && matchedJobs.length > 0 && jobsFilters.country === 'de' && (
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 pt-1">
+                            Jobs from the Bundesagentur für Arbeit · "Remote" = home office possible
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -22,6 +22,15 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    proxy: {
+      // Mirrors api/jobsuche.ts (the Vercel function used in production)
+      '/api/jobsuche': {
+        target: 'https://rest.arbeitsagentur.de',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/jobsuche/, '/jobboerse/jobsuche-service/pc/v6/jobs'),
+        headers: { 'X-API-Key': 'jobboerse-jobsuche' },
+      },
+    },
   },
   build: {
     rollupOptions: {
