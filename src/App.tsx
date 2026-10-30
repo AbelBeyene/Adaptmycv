@@ -262,7 +262,7 @@ function App() {
 
   const isResumeStudioPage = currentStep === 'prepare'
   const isCriticPage = currentStep === 'critic'
-  const progressStep = currentStep === 'prepare' ? 'results' : currentStep
+  const progressStep = currentStep === 'prepare' || currentStep === 'critic' ? 'results' : currentStep
   const currentStepIndex = progressSteps.indexOf(progressStep)
   const progressWidth = progressSteps.length > 1 ? (currentStepIndex / (progressSteps.length - 1)) * 100 : 0
 
@@ -277,10 +277,10 @@ function App() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {isResumeStudioPage ? 'AdaptMyCV Resume Studio' : 'AdaptMyCV'}
+                  {isResumeStudioPage ? 'AdaptMyCV Resume Studio' : isCriticPage ? 'Resume Critic' : 'AdaptMyCV'}
                 </h1>
                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                  {isResumeStudioPage ? 'Edit, compile, and refine your enhanced resume' : 'Tailor your resume instantly'}
+                  {isResumeStudioPage ? 'Edit, compile, and refine your enhanced resume' : isCriticPage ? '11-point professional resume audit' : 'Tailor your resume instantly'}
                 </p>
               </div>
             </div>
@@ -299,7 +299,18 @@ function App() {
           </div>
         </header>
 
-        {isResumeStudioPage ? (
+        {isCriticPage ? (
+          <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="slide-in">
+              {resumeText && (
+                <ResumeCritic
+                  resumeText={resumeText}
+                  onBack={() => setCurrentStep('job')}
+                />
+              )}
+            </div>
+          </main>
+        ) : isResumeStudioPage ? (
           <main className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="slide-in">
               {resumeText && jobDescription && (
@@ -359,6 +370,7 @@ function App() {
                     onSubmit={handleJobSubmit}
                     onBack={() => setCurrentStep('upload')}
                     initialJobLink={selectedJobLink}
+                    onCritiqueResume={handleCritiqueResume}
                   />
                 )}
 
