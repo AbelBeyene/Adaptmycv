@@ -21,10 +21,10 @@ Tailor your resume instantly for any job opportunity. AdaptMyCV analyzes your re
 | Build | Vite |
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
-| AI | OpenRouter (default: `google/gemini-2.0-flash`) |
+| AI | Google Gemini via its OpenAI-compatible API (default: `gemini-3-flash-preview`) |
 | PDF parsing | pdfjs-dist |
 | DOCX parsing | mammoth |
-| Job listings | JSearch via RapidAPI |
+| Job listings | Bundesagentur für Arbeit (Germany, free) · JSearch via RapidAPI (other countries) |
 | LaTeX compile | latexonline.cc |
 | Tests | Vitest + jsdom + Testing Library |
 
@@ -33,8 +33,8 @@ Tailor your resume instantly for any job opportunity. AdaptMyCV analyzes your re
 ### Prerequisites
 
 - Node.js 18+
-- An [OpenRouter](https://openrouter.ai) API key
-- (Optional) A [RapidAPI](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) key for the job-matching sidebar
+- A [Gemini API key](https://aistudio.google.com/apikey)
+- (Optional) A [RapidAPI](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) key for job matching outside Germany
 
 ### Installation
 
@@ -47,13 +47,14 @@ npm install
 Create a `.env.local` file in the project root:
 
 ```env
-VITE_OPENROUTER_API_KEY=your_openrouter_key_here
-VITE_OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
-VITE_OPENROUTER_MODEL=google/gemini-2.0-flash   # optional, this is the default
-VITE_RAPIDAPI_KEY=your_rapidapi_key_here             # optional, enables job sidebar
+VITE_GEMINI_API_KEY=your_gemini_key_here
+VITE_GEMINI_MODEL=gemini-3-flash-preview    # optional, this is the default
+VITE_RAPIDAPI_KEY=your_rapidapi_key_here     # optional, job matching outside Germany
 ```
 
-The app runs without `VITE_RAPIDAPI_KEY` — the job sidebar simply won't appear.
+Germany job matching uses the free Bundesagentur für Arbeit API and needs no key. Without `VITE_RAPIDAPI_KEY`, other countries show an error in the job sidebar.
+
+Set the same variables in the Vercel project settings for production. Note that `VITE_` variables are bundled into the client, so restrict the Gemini key to your domain in Google Cloud.
 
 ### Development
 
@@ -114,10 +115,11 @@ Upload Resume → Enter Job Description → Analysis Results → (optional) Resu
 
 | Variable | Required | Description |
 |---|---|---|
-| `VITE_OPENROUTER_API_KEY` | Yes | OpenRouter API key |
-| `VITE_OPENROUTER_API_URL` | Yes | OpenRouter endpoint |
-| `VITE_OPENROUTER_MODEL` | No | Model ID (default: `google/gemini-2.0-flash`) |
-| `VITE_RAPIDAPI_KEY` | No | RapidAPI key for JSearch job listings |
+| `VITE_GEMINI_API_KEY` | Yes | Gemini API key |
+| `VITE_GEMINI_API_KEY_2` | No | Second key, rotated to on rate limits (429) |
+| `VITE_GEMINI_API_URL` | No | OpenAI-compatible endpoint (default: Gemini's) |
+| `VITE_GEMINI_MODEL` | No | Model ID (default: `gemini-3-flash-preview`) |
+| `VITE_RAPIDAPI_KEY` | No | RapidAPI key for JSearch job listings outside Germany |
 
 ## Resilience & Error Handling
 
@@ -131,7 +133,7 @@ Upload Resume → Enter Job Description → Analysis Results → (optional) Resu
 ## Troubleshooting
 
 **API key not working**
-- Confirm `VITE_OPENROUTER_API_KEY` is set in `.env.local` (not `.env`)
+- Confirm `VITE_GEMINI_API_KEY` is set in `.env.local` (not `.env`)
 - Restart the dev server after editing `.env.local`
 
 **Resume Studio shows empty sections**
@@ -142,7 +144,7 @@ Upload Resume → Enter Job Description → Analysis Results → (optional) Resu
 - The preview compiles via latexonline.cc; a LaTeX syntax error in the generated document will show an error page in the iframe — use the **Download .tex** button and compile locally with `xelatex` for full diagnostics
 
 **Job sidebar missing**
-- Add `VITE_RAPIDAPI_KEY` to `.env.local` and restart
+- Outside Germany: add `VITE_RAPIDAPI_KEY` to `.env.local` and restart
 
 **File rejected on upload**
 - Supported formats: PDF, DOCX, DOC (max 10 MB)

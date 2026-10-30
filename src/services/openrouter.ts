@@ -8,13 +8,14 @@ import { normalizeCritique, type ResumeCritique } from '../lib/critique'
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 const API_KEYS: string[] = [
-  import.meta.env.VITE_OPENROUTER_API_KEY,
-  import.meta.env.VITE_OPENROUTER_API_KEY_2,
+  import.meta.env.VITE_GEMINI_API_KEY,
+  import.meta.env.VITE_GEMINI_API_KEY_2,
 ].filter(Boolean)
 
-const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
-const IS_OPENROUTER = /openrouter\.ai/i.test(API_URL ?? '')
-const MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash'
+// Any OpenAI-compatible endpoint works; defaults to Gemini's
+const API_URL = import.meta.env.VITE_GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+const IS_OPENROUTER = /openrouter\.ai/i.test(API_URL)
+const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3-flash-preview'
 
 if (API_KEYS.length === 0 || !API_URL) {
   console.error('Missing API credentials. Check your .env.local file.')
@@ -86,7 +87,7 @@ function getFriendlyOpenRouterErrorMessage(message: string): string {
   }
 
   if (message.includes('API error: 404')) {
-    return 'The selected AI model is unavailable on OpenRouter. Update VITE_OPENROUTER_MODEL in your environment variables.'
+    return 'The selected AI model is unavailable. Update VITE_GEMINI_MODEL in your environment variables.'
   }
 
   if (message.includes('API error: 5')) {
