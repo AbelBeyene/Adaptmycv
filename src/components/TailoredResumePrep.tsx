@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   Download,
+  FileText,
   Lightbulb,
   RefreshCw,
   Sparkles,
@@ -22,6 +23,7 @@ import {
   SECTION_ORDER,
   type ResumeSections,
 } from '../lib/resumeSections'
+import { latexToHtml } from '../lib/latexToHtml'
 
 interface TailoredResumePrepProps {
   resumeText: string
@@ -32,6 +34,19 @@ interface TailoredResumePrepProps {
 type EditorPanel = 'sections' | 'latex' | 'ideas'
 
 const STUDIO_CACHE_KEY = 'adaptmycv-resume-studio-v1'
+
+// Mirrors the template's look (Carlito ≈ Calibri, A4, ruled section titles); shared by the preview and the print frame
+const RESUME_PAGE_CSS = `
+.resume-page { background: #fff; color: #111; font-family: Carlito, Calibri, 'Segoe UI', Arial, sans-serif; font-size: 10pt; line-height: 1.35; padding: 1.2cm 1.4cm; }
+.resume-page h2 { font-size: 1em; font-weight: 700; border-bottom: 1px solid #111; margin: 8px 0 4px; padding-bottom: 1px; }
+.resume-page ul { list-style: disc; padding-left: 1.2em; margin: 0 0 4px; }
+.resume-page ol { list-style: decimal; padding-left: 1.2em; margin: 0 0 4px; }
+.resume-page a { color: inherit; text-decoration: none; }
+.resume-page .rs-row { display: flex; justify-content: space-between; gap: 1em; }
+.resume-page .rs-name { font-size: 1.75em; }
+.resume-page .rs-lg { font-size: 1.2em; }
+.resume-page .rs-par { height: 4px; }
+`
 
 export default function TailoredResumePrep({
   resumeText,
@@ -45,7 +60,6 @@ export default function TailoredResumePrep({
   const [copyError, setCopyError] = useState(false)
   const [activePanel, setActivePanel] = useState<EditorPanel>('sections')
   const [editableLatex, setEditableLatex] = useState('')
-  const [compiledLatex, setCompiledLatex] = useState('')
   const [sections, setSections] = useState<ResumeSections>(EMPTY_SECTIONS)
   const [sectionsUnparseable, setSectionsUnparseable] = useState(false)
 
@@ -59,7 +73,6 @@ export default function TailoredResumePrep({
       setError(null)
       setTailoredResume(null)
       setEditableLatex('')
-      setCompiledLatex('')
 
       const generatedResume = await generateTailoredResumeLatex(resumeText, jobDescription)
       if (myId !== generationIdRef.current) return
@@ -67,7 +80,6 @@ export default function TailoredResumePrep({
       const parsedSections = parseResumeSections(generatedResume.latex)
       setTailoredResume(generatedResume)
       setEditableLatex(generatedResume.latex)
-      setCompiledLatex(generatedResume.latex)
       setSections(parsedSections)
       setSectionsUnparseable(allSectionsEmpty(parsedSections))
     } catch (generationError) {
@@ -96,7 +108,6 @@ export default function TailoredResumePrep({
             jobDescription: string
             tailoredResume: TailoredResumeLatex
             editableLatex: string
-            compiledLatex: string
             activePanel: EditorPanel
             sections: ResumeSections
           }>
@@ -110,7 +121,6 @@ export default function TailoredResumePrep({
             const restoredSections = parsed.sections || parseResumeSections(parsed.editableLatex)
             setTailoredResume(parsed.tailoredResume)
             setEditableLatex(parsed.editableLatex)
-            setCompiledLatex(parsed.compiledLatex || parsed.editableLatex)
             setSections(restoredSections)
             setSectionsUnparseable(allSectionsEmpty(restoredSections))
             setActivePanel(parsed.activePanel || 'sections')
@@ -127,7 +137,6 @@ export default function TailoredResumePrep({
         setError(null)
         setTailoredResume(null)
         setEditableLatex('')
-        setCompiledLatex('')
 
         const generatedResume = await generateTailoredResumeLatex(resumeText, jobDescription)
         if (cancelled) {
@@ -137,7 +146,6 @@ export default function TailoredResumePrep({
         const parsedSections = parseResumeSections(generatedResume.latex)
         setTailoredResume(generatedResume)
         setEditableLatex(generatedResume.latex)
-        setCompiledLatex(generatedResume.latex)
         setSections(parsedSections)
         setSectionsUnparseable(allSectionsEmpty(parsedSections))
       } catch (generationError) {
@@ -165,20 +173,6 @@ export default function TailoredResumePrep({
   }, [resumeText, jobDescription])
 
   useEffect(() => {
-    if (!editableLatex.trim()) {
-      return
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setCompiledLatex(editableLatex)
-    }, 700)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [editableLatex])
-
-  useEffect(() => {
     if (!tailoredResume || !editableLatex.trim()) {
       return
     }
@@ -191,7 +185,6 @@ export default function TailoredResumePrep({
           jobDescription,
           tailoredResume,
           editableLatex,
-          compiledLatex,
           activePanel,
           sections,
         })
@@ -199,15 +192,27 @@ export default function TailoredResumePrep({
     } catch (cacheError) {
       console.warn('Failed to persist resume studio cache:', cacheError)
     }
-  }, [resumeText, jobDescription, tailoredResume, editableLatex, compiledLatex, activePanel, sections])
+  }, [resumeText, jobDescription, tailoredResume, editableLatex, activePanel, sections])
 
-  const latexPdfUrl = useMemo(() => {
-    if (!compiledLatex.trim()) {
-      return null
+  // Rendered locally on every edit; the online LaTeX compiler is only hit when the user asks for it
+  const previewHtml = useMemo(() => latexToHtml(editableLatex), [editableLatex])
+
+  // Print just the resume through a throwaway frame so the browser's "Save as PDF" gets a clean A4 document
+  const handleSavePdf = () => {
+    const frame = document.createElement('iframe')
+    frame.style.cssText = 'position:fixed;width:0;height:0;border:0;'
+    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>adapted-resume</title><style>${RESUME_PAGE_CSS}
+@page { size: A4; margin: 1.2cm 1.4cm; } body { margin: 0; } .resume-page { padding: 0; }</style></head>
+<body><div class="resume-page">${previewHtml}</div></body></html>`
+    frame.onload = () => {
+      const win = frame.contentWindow
+      if (!win) return frame.remove()
+      win.addEventListener('afterprint', () => frame.remove())
+      win.focus()
+      win.print()
     }
-
-    return buildLatexPdfUrl(compiledLatex, 'adapted-harvard-resume.pdf')
-  }, [compiledLatex])
+    document.body.appendChild(frame)
+  }
 
   const handleCopy = async () => {
     if (!editableLatex.trim()) {
@@ -256,11 +261,20 @@ export default function TailoredResumePrep({
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="section-title mb-2">Prepare Enhanced Resume</h2>
-          <p className="section-subtitle">
-            Building a template-based LaTeX resume tailored to this role without inventing experience.
-          </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            aria-label="Back"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-card transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="section-title mb-2">Prepare Enhanced Resume</h2>
+            <p className="section-subtitle">
+              Building a template-based LaTeX resume tailored to this role without inventing experience.
+            </p>
+          </div>
         </div>
 
         <div className="card space-y-3">
@@ -452,7 +466,7 @@ export default function TailoredResumePrep({
               </div>
 
               <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
-                These sections map back into the current LaTeX document and update the PDF preview automatically.
+                These sections map back into the current LaTeX document and update the preview automatically.
               </p>
             </div>
           ) : activePanel === 'latex' ? (
@@ -483,7 +497,7 @@ export default function TailoredResumePrep({
               />
 
               <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
-                The PDF preview recompiles automatically a moment after you stop typing.
+                The preview updates as you type.
               </p>
             </div>
           ) : (
@@ -513,30 +527,40 @@ export default function TailoredResumePrep({
         <div className="card space-y-4">
           <div className="flex items-start justify-between gap-3 flex-col sm:flex-row">
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Live PDF preview</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Live preview</p>
               <p className="text-sm text-gray-600 dark:text-dark-text-secondary mt-1">
-                This preview is compiled from the current LaTeX using the ATS template-based output.
+                Rendered in your browser as you edit. Save as PDF uses your browser's print dialog.
               </p>
             </div>
-            {latexPdfUrl && (
-              <a href={latexPdfUrl} target="_blank" rel="noreferrer" className="btn-primary px-2 py-1 text-xs">
-                Open PDF
-              </a>
+            {previewHtml && (
+              <div className="flex gap-2 flex-wrap">
+                <button type="button" onClick={handleSavePdf} className="btn-primary flex items-center gap-1 px-2 py-1 text-xs">
+                  <Download className="w-4 h-4" />
+                  Save as PDF
+                </button>
+                <a
+                  href={buildLatexPdfUrl(editableLatex, 'adapted-harvard-resume.pdf')}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Compiles the .tex with the online LaTeX service for exact typesetting"
+                  className="btn-secondary flex items-center gap-1 px-2 py-1 text-xs"
+                >
+                  <FileText className="w-4 h-4" />
+                  LaTeX PDF
+                </a>
+              </div>
             )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 dark:border-dark-border p-3 bg-gray-50 dark:bg-dark-card/50">
-            <p className="text-xs text-gray-500 dark:text-dark-text-secondary">
-              Auto-compile status: {compiledLatex === editableLatex ? 'Up to date' : 'Compiling changes...'}
-            </p>
-          </div>
-
-          {latexPdfUrl ? (
-            <iframe
-              src={latexPdfUrl}
-              title="Tailored LaTeX resume PDF preview"
-              className="w-full h-[46rem] rounded border border-gray-200 dark:border-dark-border bg-white"
-            />
+          {previewHtml ? (
+            <>
+              <style>{RESUME_PAGE_CSS}</style>
+              <div
+                className="resume-page rounded border border-gray-200 dark:border-dark-border min-h-[46rem] overflow-x-auto"
+                // Safe: latexToHtml escapes all text and only emits http(s)/mailto links
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            </>
           ) : (
             <div className="rounded-lg border border-gray-200 dark:border-dark-border p-6 bg-gray-50 dark:bg-dark-card/50">
               <p className="text-sm text-gray-600 dark:text-dark-text-secondary">
