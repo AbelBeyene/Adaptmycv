@@ -13,6 +13,7 @@ const API_KEYS: string[] = [
 ].filter(Boolean)
 
 const API_URL = import.meta.env.VITE_OPENROUTER_API_URL
+const IS_OPENROUTER = /openrouter\.ai/i.test(API_URL ?? '')
 const MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-2.0-flash'
 
 if (API_KEYS.length === 0 || !API_URL) {
@@ -163,8 +164,8 @@ async function callOpenRouterAPI(messages: OpenRouterMessage[], requireJson = fa
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'AdaptMyCV',
+          // OpenRouter-only attribution headers; other providers (e.g. Gemini) fail the CORS preflight on them
+          ...(IS_OPENROUTER ? { 'HTTP-Referer': window.location.origin, 'X-Title': 'AdaptMyCV' } : {}),
         },
         body: JSON.stringify({
           model: MODEL,
