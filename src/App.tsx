@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Briefcase,
   Moon,
+  RotateCcw,
   SlidersHorizontal,
   Sun,
   Target,
@@ -93,6 +94,7 @@ function App() {
   const [critiqueForResume, setCritiqueForResume] =
     useState<ResumeCritique | null>(null);
   const filtersRef = useRef<HTMLDivElement>(null);
+  const uploadGenerationRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -217,8 +219,10 @@ function App() {
   const RESUME_STORE_KEY = "adaptmycv-saved-resume-v1";
 
   const handleResumeUpload = async (file: File) => {
+    const uploadGeneration = uploadGenerationRef.current;
     setResumeFileName(file.name);
     const text = await extractResumeText(file);
+    if (uploadGeneration !== uploadGenerationRef.current) return;
     setResumeText(text);
     try {
       window.localStorage.setItem(
@@ -246,6 +250,7 @@ function App() {
   };
 
   const handleReset = () => {
+    uploadGenerationRef.current += 1;
     window.localStorage.removeItem(APP_CACHE_KEY);
     window.localStorage.removeItem("adaptmycv-resume-studio-v1");
     setCurrentStep("upload");
@@ -342,6 +347,15 @@ function App() {
             </div>
 
             <button
+              onClick={handleReset}
+              className={`items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-dark-text-secondary dark:hover:bg-dark-card transition-colors ${currentStep !== "upload" || resumeText ? "flex" : "hidden"}`}
+              aria-label="Reset resume"
+              title="Reset resume"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden sm:inline">Reset resume</span>
+            </button>
+            <button
               onClick={() => setIsDark(!isDark)}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-card transition-colors"
               aria-label="Toggle theme"
@@ -420,6 +434,7 @@ function App() {
                   <ResumUploader
                     onUpload={handleResumeUpload}
                     onResumeCached={handleResumeCached}
+                    onReset={handleReset}
                     resumeStoreKey={RESUME_STORE_KEY}
                   />
                 )}
