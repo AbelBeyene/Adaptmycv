@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import ResumUploader from "./components/ResumeUploader";
+import ResumePreview from "./components/ResumePreview";
 import JobDescriptionInput from "./components/JobDescriptionInput";
 import AnalysisResults from "./components/AnalysisResults";
 import TailoredResumePrep from "./components/TailoredResumePrep";
@@ -57,6 +58,7 @@ function App() {
     cache.currentStep ?? "upload",
   );
   const [resumeFileName, setResumeFileName] = useState("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeText, setResumeText] = useState(
     typeof cache.resumeText === "string" ? cache.resumeText : "",
   );
@@ -221,6 +223,7 @@ function App() {
   const handleResumeUpload = async (file: File) => {
     const uploadGeneration = uploadGenerationRef.current;
     setResumeFileName(file.name);
+    setResumeFile(file);
     const text = await extractResumeText(file);
     if (uploadGeneration !== uploadGenerationRef.current) return;
     setResumeText(text);
@@ -238,6 +241,7 @@ function App() {
   const handleResumeCached = (text: string, fileName: string) => {
     setResumeText(text);
     setResumeFileName(fileName);
+    setResumeFile(null);
     setCurrentStep("job");
   };
 
@@ -256,6 +260,7 @@ function App() {
     window.localStorage.removeItem("adaptmycv-resume-studio-v1");
     setCurrentStep("upload");
     setResumeFileName("");
+    setResumeFile(null);
     setResumeText("");
     setJobDescription("");
     setSelectedJobForAction(null);
@@ -475,7 +480,7 @@ function App() {
                           {resumeFileName}
                         </span>
                       </div>
-
+                      <ResumePreview file={resumeFile} />
                     </div>
 
                     {currentStep === "results" &&
