@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronRight, Copy, Check, ChevronLeft } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronRight, Copy, Check, ChevronLeft, CheckCircle2 } from 'lucide-react'
 import type { ResumeCritique, ResumeDocSection, CritiqueFinding } from '../../services/openrouter'
 
 interface CritiqueSidebarProps {
@@ -10,63 +10,29 @@ interface CritiqueSidebarProps {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function letterGrade(score: number): string {
-  if (score >= 93) return 'A+'
-  if (score >= 90) return 'A'
-  if (score >= 87) return 'A-'
-  if (score >= 83) return 'B+'
-  if (score >= 80) return 'B'
-  if (score >= 77) return 'B-'
-  if (score >= 73) return 'C+'
-  if (score >= 70) return 'C'
-  if (score >= 67) return 'C-'
-  if (score >= 60) return 'D'
-  return 'F'
-}
-
-function gradeColors(score: number) {
-  if (score >= 80) return { ring: 'ring-green-400', text: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' }
-  if (score >= 60) return { ring: 'ring-amber-400', text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20' }
-  return { ring: 'ring-red-400', text: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20' }
-}
-
 function scoreBarColor(pct: number) {
   if (pct >= 70) return 'bg-green-500'
   if (pct >= 45) return 'bg-amber-500'
   return 'bg-red-500'
 }
 
-// Flatten all findings across sections into a sorted list (fail → warn → pass)
+function scoreTextColor(pct: number) {
+  if (pct >= 70) return 'text-green-600 dark:text-green-400'
+  if (pct >= 45) return 'text-amber-600 dark:text-amber-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+// Flatten all findings across sections, worst section first
 interface FlatFinding {
   section: ResumeDocSection
   finding: CritiqueFinding
-  findingIdx: number
 }
 
 function flattenFindings(sections: ResumeDocSection[]): FlatFinding[] {
-  const order = { fail: 0, warn: 1, pass: 2 }
   return sections
     .slice()
-    .sort((a, b) => order[a.status] - order[b.status])
-    .flatMap((section) =>
-      section.findings.map((finding, findingIdx) => ({ section, finding, findingIdx }))
-    )
-}
-
-// Compute derived metrics from section scores
-function computeMetrics(sections: ResumeDocSection[]) {
-  const avg = (keys: string[]) => {
-    const matched = sections.filter((s) =>
-      keys.some((k) => s.key.toLowerCase().includes(k) || s.title.toLowerCase().includes(k))
-    )
-    if (!matched.length) return null
-    return Math.round((matched.reduce((sum, s) => sum + s.score, 0) / matched.length) * 10)
-  }
-
-  return {
-    clarity: avg(['format', 'tone', 'language', 'summar']),
-    impact: avg(['experience', 'keyword', 'skill', 'achiev', 'work']),
-  }
+    .sort((a, b) => a.score - b.score)
+    .flatMap((section) => section.findings.map((finding) => ({ section, finding })))
 }
 
 function impactBadge(status: ResumeDocSection['status']) {
@@ -77,49 +43,27 @@ function impactBadge(status: ResumeDocSection['status']) {
 
 // ─── sub-components ───────────────────────────────────────────────────────────
 
-function ScoreHeader({ score }: { score: number }) {
-  const grade = letterGrade(score)
-  const colors = gradeColors(score)
-
-  return (
-    <div className="flex items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-dark-border">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">
-          Overall Resume Score
-        </p>
-        <p className="text-3xl font-bold text-gray-900 dark:text-white leading-none">
-          {score}
-          <span className="text-base font-normal text-gray-400 dark:text-gray-500">/100</span>
-        </p>
-      </div>
-      <div className={`w-14 h-14 rounded-full ring-4 ${colors.ring} ${colors.bg} flex items-center justify-center flex-shrink-0`}>
-        <span className={`text-lg font-bold ${colors.text}`}>{grade}</span>
-      </div>
-    </div>
-  )
-}
-
 function FeaturedFinding({
   flat,
   index,
   total,
   onPrev,
   onNext,
-  onSectionSelect,
 }: {
   flat: FlatFinding
   index: number
   total: number
   onPrev: () => void
   onNext: () => void
-  onSectionSelect: (key: string) => void
 }) {
   const [copied, setCopied] = useState(false)
   const badge = impactBadge(flat.section.status)
+  const { finding } = flat
+  const copyText = finding.rewrite || finding.suggestion
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(flat.finding.suggestion)
+      await navigator.clipboard.writeText(copyText)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch { /* ignore */ }
@@ -133,28 +77,31 @@ function FeaturedFinding({
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${badge.cls}`}>
             {badge.label}
           </span>
-          <button
-            type="button"
-            onClick={() => onSectionSelect(flat.section.key)}
-            className="block text-sm font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 text-left"
-          >
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">
             {flat.section.title}
-          </button>
+            <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">{flat.section.score}/10</span>
+          </p>
         </div>
-        {/* Prev / Next navigation */}
+        {/* Prev / Next navigation (also ← / → keys) */}
         {total > 1 && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
+              type="button"
               onClick={onPrev}
               disabled={index === 0}
+              aria-label="Previous issue"
+              title="Previous issue (←)"
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-card disabled:opacity-30 transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <span className="text-[11px] text-gray-400 tabular-nums">{index + 1}/{total}</span>
             <button
+              type="button"
               onClick={onNext}
               disabled={index === total - 1}
+              aria-label="Next issue"
+              title="Next issue (→)"
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-card disabled:opacity-30 transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5" />
@@ -164,37 +111,67 @@ function FeaturedFinding({
       </div>
 
       {/* Issue description */}
-      <p className="text-sm text-gray-600 dark:text-dark-text-secondary">{flat.finding.issue}</p>
+      <p className="text-sm text-gray-700 dark:text-dark-text-secondary">{finding.issue}</p>
 
       {/* Quoted problem text */}
-      {flat.finding.quote && (
+      {finding.quote ? (
         <div className="rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 px-3 py-2">
           <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide mb-1">Current text</p>
-          <p className="text-xs font-mono text-amber-800 dark:text-amber-200 leading-relaxed">"{flat.finding.quote}"</p>
+          <p className="text-xs font-mono text-amber-800 dark:text-amber-200 leading-relaxed break-words">"{finding.quote}"</p>
+        </div>
+      ) : flat.section.missing ? (
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-dark-border px-3 py-2">
+          <p className="text-xs italic text-gray-500 dark:text-gray-400">This section is missing from your resume</p>
+        </div>
+      ) : null}
+
+      {/* How to fix */}
+      {finding.suggestion && (
+        <div className="rounded-lg bg-gray-50 dark:bg-dark-card border border-gray-200 dark:border-dark-border px-3 py-2">
+          <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">How to fix</p>
+          <p className="text-xs text-gray-800 dark:text-white leading-relaxed">{finding.suggestion}</p>
         </div>
       )}
 
-      {/* Suggested fix */}
-      <div className="rounded-lg bg-gray-50 dark:bg-dark-card border border-gray-200 dark:border-dark-border px-3 py-2">
-        <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Suggested Fix</p>
-        <p className="text-xs text-gray-800 dark:text-white leading-relaxed">{flat.finding.suggestion}</p>
-      </div>
+      {/* Ready-to-paste rewrite */}
+      {finding.rewrite && (
+        <div className="rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40 px-3 py-2">
+          <p className="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">Suggested rewrite</p>
+          <p className="text-xs text-green-900 dark:text-green-100 leading-relaxed whitespace-pre-line break-words">{finding.rewrite}</p>
+        </div>
+      )}
 
-      {/* Copy button */}
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
-      >
-        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-        {copied ? 'Copied!' : 'Copy suggestion'}
-      </button>
+      {copyText && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? 'Copied!' : finding.rewrite ? 'Copy rewrite' : 'Copy suggestion'}
+        </button>
+      )}
     </div>
   )
 }
 
-function MetricsRow({ clarity, impact }: { clarity: number | null; impact: number | null }) {
-  if (!clarity && !impact) return null
+function CleanSection({ section }: { section: ResumeDocSection }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+        {section.title}
+        <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">{section.score}/10</span>
+      </p>
+      <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+        This section looks strong — no issues found.
+      </p>
+    </div>
+  )
+}
+
+function MetricsRow({ clarity, impact }: ResumeCritique['metrics']) {
+  if (clarity === null && impact === null) return null
 
   const Metric = ({ label, value }: { label: string; value: number | null }) => {
     if (value === null) return null
@@ -202,9 +179,7 @@ function MetricsRow({ clarity, impact }: { clarity: number | null; impact: numbe
       <div className="flex-1 space-y-1">
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</p>
-          <p className={`text-sm font-bold ${value >= 70 ? 'text-green-600 dark:text-green-400' : value >= 45 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
-            {value}%
-          </p>
+          <p className={`text-sm font-bold ${scoreTextColor(value)}`}>{value}%</p>
         </div>
         <div className="h-1.5 rounded-full bg-gray-200 dark:bg-dark-border overflow-hidden">
           <div className={`h-full rounded-full ${scoreBarColor(value)}`} style={{ width: `${value}%` }} />
@@ -221,39 +196,40 @@ function MetricsRow({ clarity, impact }: { clarity: number | null; impact: numbe
   )
 }
 
-function OtherImprovements({
+function AllIssues({
   items,
+  activeIdx,
   onSelect,
 }: {
   items: FlatFinding[]
-  onSelect: (sectionKey: string) => void
+  activeIdx: number
+  onSelect: (idx: number) => void
 }) {
-  if (!items.length) return null
-  const badge = (status: ResumeDocSection['status']) => {
-    if (status === 'fail') return 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-    if (status === 'warn') return 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
-    return 'bg-gray-100 dark:bg-dark-card text-gray-500'
-  }
+  if (items.length < 2) return null
+  const dot = (status: ResumeDocSection['status']) =>
+    status === 'fail' ? 'bg-red-500' : status === 'warn' ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'
 
   return (
     <div className="space-y-1">
       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-        Other Improvements ({items.length})
+        All issues ({items.length})
       </p>
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {items.map((flat, i) => (
           <button
-            key={i}
+            key={`${flat.section.key}-${i}`}
             type="button"
-            onClick={() => onSelect(flat.section.key)}
-            className="w-full flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-card transition-colors text-left group"
+            onClick={() => onSelect(i)}
+            aria-current={i === activeIdx}
+            className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors text-left group ${
+              i === activeIdx ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-dark-card'
+            }`}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${badge(flat.section.status)}`}>
-                {flat.section.title.split(' ')[0].toUpperCase()}
-              </span>
-              <p className="text-xs text-gray-600 dark:text-dark-text-secondary truncate">{flat.finding.issue}</p>
-            </div>
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot(flat.section.status)}`} />
+            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 flex-shrink-0 max-w-[6rem] truncate">
+              {flat.section.title}
+            </span>
+            <span className="text-xs text-gray-600 dark:text-dark-text-secondary truncate flex-1">{flat.finding.issue}</span>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 flex-shrink-0" />
           </button>
         ))}
@@ -265,50 +241,50 @@ function OtherImprovements({
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 export default function CritiqueSidebar({ critique, selectedKey, onSectionSelect }: CritiqueSidebarProps) {
-  const allFindings = flattenFindings(critique.sections)
+  const allFindings = useMemo(() => flattenFindings(critique.sections), [critique.sections])
   const [featuredIdx, setFeaturedIdx] = useState(0)
 
-  // When a section is selected from the doc, jump to that section's first finding
-  const effectiveIdx = (() => {
-    if (!selectedKey) return featuredIdx
-    const idx = allFindings.findIndex((f) => f.section.key === selectedKey)
-    return idx >= 0 ? idx : featuredIdx
-  })()
+  // Prev/Next keep their exact position; a click on another section in the document jumps to its first finding.
+  const sectionStart = allFindings.findIndex((f) => f.section.key === selectedKey)
+  const effectiveIdx =
+    !selectedKey || allFindings[featuredIdx]?.section.key === selectedKey || sectionStart < 0
+      ? featuredIdx
+      : sectionStart
 
+  const selectedSection = critique.sections.find((s) => s.key === selectedKey)
   const featured = allFindings[effectiveIdx]
-  const others = allFindings.filter((_, i) => i !== effectiveIdx)
-  const metrics = computeMetrics(critique.sections)
 
-  const handlePrev = () => {
-    const newIdx = Math.max(0, effectiveIdx - 1)
-    setFeaturedIdx(newIdx)
-    onSectionSelect(allFindings[newIdx].section.key)
+  const goTo = (idx: number) => {
+    const target = allFindings[idx]
+    if (!target) return
+    setFeaturedIdx(idx)
+    onSectionSelect(target.section.key)
   }
 
-  const handleNext = () => {
-    const newIdx = Math.min(allFindings.length - 1, effectiveIdx + 1)
-    setFeaturedIdx(newIdx)
-    onSectionSelect(allFindings[newIdx].section.key)
-  }
-
-  const handleOtherSelect = (key: string) => {
-    const idx = allFindings.findIndex((f) => f.section.key === key)
-    if (idx >= 0) setFeaturedIdx(idx)
-    onSectionSelect(key)
-  }
+  // ← / → step through issues unless the user is typing somewhere
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement
+      if (e.metaKey || e.ctrlKey || e.altKey || el.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key === 'ArrowRight') goTo(Math.min(allFindings.length - 1, effectiveIdx + 1))
+      else if (e.key === 'ArrowLeft') goTo(Math.max(0, effectiveIdx - 1))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   return (
     <div className="card p-4 space-y-4">
-      <ScoreHeader score={critique.overallScore} />
-
-      {featured ? (
+      {selectedSection && selectedSection.findings.length === 0 ? (
+        <CleanSection section={selectedSection} />
+      ) : featured ? (
         <FeaturedFinding
+          key={effectiveIdx}
           flat={featured}
           index={effectiveIdx}
           total={allFindings.length}
-          onPrev={handlePrev}
-          onNext={handleNext}
-          onSectionSelect={onSectionSelect}
+          onPrev={() => goTo(effectiveIdx - 1)}
+          onNext={() => goTo(effectiveIdx + 1)}
         />
       ) : (
         <p className="text-sm text-green-700 dark:text-green-400 py-2">
@@ -316,9 +292,9 @@ export default function CritiqueSidebar({ critique, selectedKey, onSectionSelect
         </p>
       )}
 
-      <MetricsRow clarity={metrics.clarity} impact={metrics.impact} />
+      <MetricsRow {...critique.metrics} />
 
-      <OtherImprovements items={others.slice(0, 6)} onSelect={handleOtherSelect} />
+      <AllIssues items={allFindings} activeIdx={effectiveIdx} onSelect={goTo} />
     </div>
   )
 }

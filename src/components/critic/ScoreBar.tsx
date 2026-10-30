@@ -1,9 +1,10 @@
-import { XCircle, Zap } from 'lucide-react'
+import { XCircle, Zap, Target } from 'lucide-react'
 
 interface ScoreBarProps {
   score: number
   redFlags: string[]
   quickWins: string[]
+  missingKeywords: string[]
 }
 
 function barColor(score: number) {
@@ -24,7 +25,7 @@ function scoreLabel(score: number) {
   return 'Needs significant work before applying'
 }
 
-export default function ScoreBar({ score, redFlags, quickWins }: ScoreBarProps) {
+export default function ScoreBar({ score, redFlags, quickWins, missingKeywords }: ScoreBarProps) {
   return (
     <div className="space-y-3">
       {/* Score row */}
@@ -79,6 +80,23 @@ export default function ScoreBar({ score, redFlags, quickWins }: ScoreBarProps) 
               </ul>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Keywords from the target job that the resume never mentions */}
+      {missingKeywords.length > 0 && (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800/40 bg-blue-50/60 dark:bg-blue-900/10 p-3.5">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-300">Missing Job Keywords</h3>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {missingKeywords.map((kw, i) => (
+              <span key={i} className="text-xs px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800/60 bg-white dark:bg-dark-card text-blue-700 dark:text-blue-300">
+                {kw}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

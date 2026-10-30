@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react'
 import { analyzeResumeCritique, ResumeCritique } from '../../services/openrouter'
 import ScoreBar from './ScoreBar'
@@ -7,26 +7,42 @@ import ResumeDocument from './ResumeDocument'
 
 interface ResumeCriticProps {
   resumeText: string
+  jobDescription?: string
   onBack: () => void
 }
 
-const CACHE_KEY = 'adaptmycv-resume-critic-v1'
+const CACHE_KEY = 'adaptmycv-resume-critic-v2'
 
-export default function ResumeCritic({ resumeText, onBack }: ResumeCriticProps) {
+// Open on the weakest section that has something to fix
+function initialKey(critique: ResumeCritique): string | null {
+  const worst = critique.sections.slice().sort((a, b) => a.score - b.score).find((s) => s.findings.length)
+  return worst?.key ?? critique.sections[0]?.key ?? null
+}
+
+export default function ResumeCritic({ resumeText, jobDescription = '', onBack }: ResumeCriticProps) {
   const [critique, setCritique] = useState<ResumeCritique | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+
+  // Stacked layout: the feedback sits below the resume, so bring it into view
+  const handleDocSectionClick = (key: string) => {
+    setSelectedKey(key)
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+      sidebarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
 
   const runCritique = useCallback(async (skipCache = false) => {
     if (!skipCache) {
       try {
         const cached = window.localStorage.getItem(CACHE_KEY)
         if (cached) {
-          const parsed = JSON.parse(cached) as { resumeText: string; critique: ResumeCritique }
-          if (parsed.resumeText === resumeText && parsed.critique?.resumeMarkdown) {
+          const parsed = JSON.parse(cached) as { resumeText: string; jobDescription?: string; critique: ResumeCritique }
+          if (parsed.resumeText === resumeText && (parsed.jobDescription ?? '') === jobDescription && parsed.critique?.resumeMarkdown) {
             setCritique(parsed.critique)
-            setSelectedKey(parsed.critique.sections[0]?.key ?? null)
+            setSelectedKey(initialKey(parsed.critique))
             setIsLoading(false)
             return
           }
@@ -40,18 +56,18 @@ export default function ResumeCritic({ resumeText, onBack }: ResumeCriticProps) 
     setSelectedKey(null)
 
     try {
-      const result = await analyzeResumeCritique(resumeText)
+      const result = await analyzeResumeCritique(resumeText, jobDescription)
       setCritique(result)
-      setSelectedKey(result.sections[0]?.key ?? null)
+      setSelectedKey(initialKey(result))
       try {
-        window.localStorage.setItem(CACHE_KEY, JSON.stringify({ resumeText, critique: result }))
+        window.localStorage.setItem(CACHE_KEY, JSON.stringify({ resumeText, jobDescription, critique: result }))
       } catch { /* storage full */ }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze resume')
     } finally {
       setIsLoading(false)
     }
-  }, [resumeText])
+  }, [resumeText, jobDescription])
 
   useEffect(() => { runCritique(false) }, [runCritique])
 
@@ -67,7 +83,9 @@ export default function ResumeCritic({ resumeText, onBack }: ResumeCriticProps) 
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="section-title">Resume Critic</h2>
-          <p className="section-subtitle mt-0.5">Click any section to see specific, actionable feedback</p>
+          <p className="section-subtitle mt-0.5">
+            {jobDescription ? 'Critiqued against your target job · ' : ''}Click any section for specific fixes · ← → to step through issues
+          </p>
         </div>
         {critique && !isLoading && (
           <button
@@ -125,45 +143,28 @@ export default function ResumeCritic({ resumeText, onBack }: ResumeCriticProps) 
       {/* Results */}
       {!isLoading && critique && (
         <div className="space-y-5">
-          {/* Mobile-only: score bar + red flags */}
-          <div className="lg:hidden">
-            <ScoreBar
-              score={critique.overallScore}
-              redFlags={critique.topRedFlags}
-              quickWins={critique.quickWins}
-            />
-          </div>
+          <ScoreBar
+            score={critique.overallScore}
+            redFlags={critique.topRedFlags}
+            quickWins={critique.quickWins}
+            missingKeywords={critique.missingKeywords}
+          />
 
-          {/* Desktop: resume doc (left) + critique sidebar (right) */}
-          <div className="hidden lg:grid lg:grid-cols-[1fr_360px] gap-5 items-start">
+          {/* Resume doc (left) + critique sidebar (right); stacked on mobile */}
+          <div className="grid gap-5 items-start lg:grid-cols-[minmax(0,1fr)_380px]">
             <ResumeDocument
               markdown={critique.resumeMarkdown}
               sections={critique.sections}
               selectedKey={selectedKey}
-              onSectionClick={setSelectedKey}
+              onSectionClick={handleDocSectionClick}
             />
-            <div className="sticky top-24">
+            <div ref={sidebarRef} className="scroll-mt-24 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
               <CritiqueSidebar
                 critique={critique}
                 selectedKey={selectedKey}
                 onSectionSelect={setSelectedKey}
               />
             </div>
-          </div>
-
-          {/* Mobile: resume doc full width, sidebar below */}
-          <div className="lg:hidden space-y-4">
-            <ResumeDocument
-              markdown={critique.resumeMarkdown}
-              sections={critique.sections}
-              selectedKey={selectedKey}
-              onSectionClick={setSelectedKey}
-            />
-            <CritiqueSidebar
-              critique={critique}
-              selectedKey={selectedKey}
-              onSectionSelect={setSelectedKey}
-            />
           </div>
         </div>
       )}

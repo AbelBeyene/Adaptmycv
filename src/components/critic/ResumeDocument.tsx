@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ResumeDocSection } from '../../services/openrouter'
 import { escapeRegex } from '../../lib/resumeSections'
 
@@ -35,13 +36,12 @@ function parseBlocks(markdown: string): MarkdownBlock[] {
 }
 
 function matchSection(heading: string | null, sections: ResumeDocSection[]): ResumeDocSection | undefined {
-  if (!heading) return sections.find((s) => s.key === 'contact')
+  if (!heading) return sections.find((s) => s.key === 'contact') ?? sections.find((s) => /contact/i.test(s.title))
   const h = heading.toLowerCase()
-  return sections.find(
-    (s) =>
-      s.title.toLowerCase() === h ||
-      s.title.toLowerCase().includes(h) ||
-      h.includes(s.title.toLowerCase())
+  // Exact title wins over a partial match ("Experience" must not grab "Volunteer Experience")
+  return (
+    sections.find((s) => s.title.toLowerCase() === h) ??
+    sections.find((s) => s.title.toLowerCase().includes(h) || h.includes(s.title.toLowerCase()))
   )
 }
 
@@ -66,18 +66,24 @@ function InlineText({ text, quotes }: { text: string; quotes: string[] }) {
   )
 }
 
-// Underlines problem quotes with a yellow wavy/solid underline
+// Case-insensitive and whitespace-tolerant, since the Markdown may re-wrap or re-case the original text
+function quotePattern(quote: string): string {
+  return escapeRegex(quote.replace(/\*/g, '').trim()).replace(/\s+/g, '\\s+')
+}
+
+// Underlines problem quotes with a yellow underline
 function QuoteUnderline({ text, quotes }: { text: string; quotes: string[] }) {
-  const valid = quotes.filter((q) => q.length > 3 && text.includes(q))
+  const valid = quotes.filter((q) => q.length > 3)
   if (!valid.length) return <>{text}</>
 
-  const pattern = new RegExp(`(${valid.map(escapeRegex).join('|')})`, 'g')
-  const parts = text.split(pattern)
+  // One capture group, so odd indexes are the matched quotes
+  const parts = text.split(new RegExp(`(${valid.map(quotePattern).join('|')})`, 'gi'))
+  if (parts.length === 1) return <>{text}</>
 
   return (
     <>
       {parts.map((part, i) =>
-        valid.includes(part) ? (
+        i % 2 === 1 ? (
           <span
             key={i}
             className="underline decoration-yellow-400 dark:decoration-yellow-500 decoration-2 underline-offset-2 cursor-default"
@@ -251,6 +257,33 @@ export default function ResumeDocument({
   onSectionClick,
 }: ResumeDocumentProps) {
   const blocks = parseBlocks(markdown)
+  const blockSections = blocks.map((block) => matchSection(block.heading, sections))
+  const unplaced = sections.filter((s) => !blockSections.includes(s))
+
+  // Desktop: keep the section picked via the sidebar (Prev/Next, issue list) in view.
+  // Skips the first selection so the page doesn't jump on load.
+  const sectionRefs = useRef(new Map<string, HTMLDivElement>())
+  const hasSelected = useRef(false)
+  useEffect(() => {
+    if (!selectedKey) return
+    if (!hasSelected.current) { hasSelected.current = true; return }
+    if (!window.matchMedia('(min-width: 1024px)').matches) return
+    sectionRefs.current.get(selectedKey)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [selectedKey])
+
+  const interactiveProps = (key: string) => ({
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-pressed': selectedKey === key,
+    ref: (el: HTMLDivElement | null) => {
+      if (el) sectionRefs.current.set(key, el)
+      else sectionRefs.current.delete(key)
+    },
+    onClick: () => onSectionClick(key),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSectionClick(key) }
+    },
+  })
 
   return (
     <div className="bg-white dark:bg-dark-card rounded-xl border border-gray-200 dark:border-dark-border shadow-sm overflow-hidden">
@@ -259,7 +292,7 @@ export default function ResumeDocument({
 
       <div className="p-6 space-y-4">
         {blocks.map((block, i) => {
-          const matched = matchSection(block.heading, sections)
+          const matched = blockSections[i]
           const isSelected = !!matched && selectedKey === matched.key
           const quotes = matched?.findings.map((f) => f.quote).filter(Boolean) ?? []
           const isSkills = !!(matched?.key === 'skills' || matched?.title.toLowerCase().includes('skill'))
@@ -268,10 +301,10 @@ export default function ResumeDocument({
           return (
             <div
               key={i}
-              onClick={() => clickable && onSectionClick(matched!.key)}
+              {...(clickable ? interactiveProps(matched.key) : {})}
               className={`rounded-lg border-l-4 pl-4 pr-3 py-3 transition-all duration-150 ${sectionAccent(matched?.status, isSelected)} ${
                 clickable
-                  ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card-hover'
+                  ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card-hover focus:outline-none focus-visible:bg-gray-50 dark:focus-visible:bg-dark-card-hover'
                   : ''
               }`}
             >
@@ -311,6 +344,29 @@ export default function ResumeDocument({
             </div>
           )
         })}
+
+        {/* Sections the critique covers but the resume doesn't have (or that couldn't be placed) */}
+        {unplaced.map((section) => (
+          <div
+            key={section.key}
+            {...interactiveProps(section.key)}
+            className={`rounded-lg border-l-4 border border-dashed border-gray-200 dark:border-dark-border pl-4 pr-3 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card-hover focus:outline-none focus-visible:bg-gray-50 dark:focus-visible:bg-dark-card-hover transition-all duration-150 ${sectionAccent(section.status, selectedKey === section.key)}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot(section.status)}`} />
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 dark:text-gray-500">
+                  {section.title}
+                </h2>
+              </div>
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">{section.score}/10</span>
+            </div>
+            <p className="text-xs italic text-gray-500 dark:text-gray-400 mt-2">
+              {section.missing ? 'Missing from your resume' : 'Feedback on this area'}
+              {section.findings.length > 0 && ' · click to review'}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   )

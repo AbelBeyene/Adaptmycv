@@ -246,6 +246,7 @@ function App() {
 
   const handleUseMatchedJob = (job: MatchingJob) => {
     setSelectedJobLink(job.applyLink)
+    setJobDescription('') // the job box is prefilled from this; a new job must not show the old text
     setSelectedJobForAction(null)
     setSidebarRecommendations([])
     setCurrentStep('job')
@@ -256,7 +257,10 @@ function App() {
     window.open(job.applyLink, '_blank', 'noopener,noreferrer')
   }
 
-  const handleCritiqueResume = () => {
+  const handleCritiqueResume = (typedJobDescription: string) => {
+    // Whatever is in the job box (even unsubmitted) is what the critique judges against
+    const typed = typedJobDescription.trim()
+    setJobDescription(typed.length >= 50 ? typed : '')
     setCurrentStep('critic')
   }
 
@@ -280,7 +284,7 @@ function App() {
                   {isResumeStudioPage ? 'AdaptMyCV Resume Studio' : isCriticPage ? 'Resume Critic' : 'AdaptMyCV'}
                 </h1>
                 <p className="text-xs text-gray-600 dark:text-dark-text-secondary">
-                  {isResumeStudioPage ? 'Edit, compile, and refine your enhanced resume' : isCriticPage ? '11-point professional resume audit' : 'Tailor your resume instantly'}
+                  {isResumeStudioPage ? 'Edit, compile, and refine your enhanced resume' : isCriticPage ? 'Section-by-section audit with ready-to-paste fixes' : 'Tailor your resume instantly'}
                 </p>
               </div>
             </div>
@@ -300,11 +304,12 @@ function App() {
         </header>
 
         {isCriticPage ? (
-          <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="slide-in">
               {resumeText && (
                 <ResumeCritic
                   resumeText={resumeText}
+                  jobDescription={jobDescription}
                   onBack={() => setCurrentStep('job')}
                 />
               )}
@@ -370,6 +375,7 @@ function App() {
                     onSubmit={handleJobSubmit}
                     onBack={() => setCurrentStep('upload')}
                     initialJobLink={selectedJobLink}
+                    initialJobDescription={jobDescription}
                     onCritiqueResume={handleCritiqueResume}
                   />
                 )}

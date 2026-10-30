@@ -6,14 +6,16 @@ interface JobDescriptionInputProps {
   onSubmit: (text: string) => void | Promise<void>
   onBack: () => void
   initialJobLink?: string
-  onCritiqueResume?: () => void
+  initialJobDescription?: string
+  onCritiqueResume?: (jobDescription: string) => void
 }
 
-export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink = '', onCritiqueResume }: JobDescriptionInputProps) {
-  const [jobDescription, setJobDescription] = useState('')
+export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink = '', initialJobDescription = '', onCritiqueResume }: JobDescriptionInputProps) {
+  const [jobDescription, setJobDescription] = useState(initialJobDescription)
   const [jobLink, setJobLink] = useState(initialJobLink)
   const [isLoading, setIsLoading] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
+  const hasJobText = jobDescription.trim().length >= 50
 
   useEffect(() => {
     setJobLink(initialJobLink)
@@ -167,16 +169,16 @@ export default function JobDescriptionInput({ onSubmit, onBack, initialJobLink =
         {onCritiqueResume && (
           <div className="pt-2 border-t border-gray-200 dark:border-dark-border">
             <p className="text-xs text-gray-500 dark:text-dark-text-secondary mb-2 text-center">
-              Don't have a job description yet?
+              {hasJobText ? 'Want feedback on your resume for this job first?' : "Don't have a job description yet?"}
             </p>
             <button
               type="button"
-              onClick={onCritiqueResume}
+              onClick={() => onCritiqueResume(jobDescription)}
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-gray-300 dark:border-dark-border text-sm text-gray-700 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-card transition-colors"
             >
               <MessageSquare className="w-4 h-4" />
-              Critique My Resume Instead
+              {hasJobText ? 'Critique My Resume for This Job' : 'Critique My Resume Instead'}
             </button>
           </div>
         )}
